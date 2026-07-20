@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { createBranchTool } from "./create-branch";
 import { listBranchesTool } from "./list-branches";
@@ -17,11 +16,6 @@ export const toolDefinitions = Object.fromEntries(
 ) as Record<(typeof tools)[number]["name"], (typeof tools)[number]>;
 
 export type ToolName = keyof typeof toolDefinitions;
-
-export const toolRequestSchema = z.object({
-  tool: z.string(),
-  input: z.unknown().optional(),
-});
 
 export function getToolList() {
   return tools.map((tool) => ({

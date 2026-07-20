@@ -1,17 +1,33 @@
 import { z } from "zod";
+import { parseEnv } from "./lib/env";
 
-const githubPatSchema = z.string().min(1, "GITHUB_PAT is required");
-const connectorSecretSchema = z.string().min(1, "CONNECTOR_SECRET is required");
-const portSchema = z.coerce.number().int().positive().default(3000);
+const envSchema = z.object({
+  GITHUB_PAT: z.string().trim().min(1, "GITHUB_PAT is required"),
+  CONNECTOR_SECRET: z.string().trim().min(1, "CONNECTOR_SECRET is required"),
+  PORT: z.coerce.number().int().positive().default(3000),
+});
+
+type Env = z.infer<typeof envSchema>;
+
+let cachedEnv: Env | null = null;
+
+function getEnv(): Env {
+  if (cachedEnv) {
+    return cachedEnv;
+  }
+
+  cachedEnv = parseEnv(envSchema, { label: "application environment" });
+  return cachedEnv;
+}
 
 export function getGithubPat(): string {
-  return githubPatSchema.parse(process.env.GITHUB_PAT);
+  return getEnv().GITHUB_PAT;
 }
 
 export function getConnectorSecret(): string {
-  return connectorSecretSchema.parse(process.env.CONNECTOR_SECRET);
+  return getEnv().CONNECTOR_SECRET;
 }
 
 export function getPort(): number {
-  return portSchema.parse(process.env.PORT);
+  return getEnv().PORT;
 }

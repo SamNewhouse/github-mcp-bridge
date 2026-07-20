@@ -1,4 +1,7 @@
 import * as http from "node:http";
+import { AppError } from "./errors";
+
+const MAX_BODY_SIZE_BYTES = 1024 * 1024;
 
 export function sendJson(
   res: http.ServerResponse,
@@ -13,17 +16,33 @@ export function sendJson(
 export function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let totalBytes = 0;
 
-    req.on("data", (chunk) => {
-      chunks.push(Buffer.from(chunk));
+    req.on("data", (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.length;
+
+      if (totalBytes > MAX_BODY_SIZE_BYTES) {
+        reject(new AppError("Request body too large", 413));
+        req.destroy();
+        return;
+      }
+
+      chunks.push(buffer);
     });
 
     req.on("end", () => {
       try {
-        const raw = Buffer.concat(chunks).toString("utf8");
-        resolve(raw ? JSON.parse(raw) : {});
-      } catch (error) {
-        reject(error);
+        const raw = Buffer.concat(chunks).toString("utf8").trim();
+
+        if (!raw) {
+          resolve({});
+          return;
+        }
+
+        resolve(JSON.parse(raw) as unknown);
+      } catch {
+        reject(new AppError("Invalid JSON body", 400));
       }
     });
 
@@ -37,4 +56,36 @@ export function getRequestUrl(req: http.IncomingMessage): URL | null {
   }
 
   return new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+}
+
+export type JsonRpcId = string | number | null | undefined;
+
+export function sendJsonRpcResult(
+  res: http.ServerResponse,
+  id: JsonRpcId,
+  result: unknown,
+): void {
+  sendJson(res, 200, {
+    jsonrpc: "2.0",
+    id: id ?? null,
+    result,
+  });
+}
+
+export function sendJsonRpcError(
+  res: http.ServerResponse,
+  id: JsonRpcId,
+  code: number,
+  message: string,
+  data?: unknown,
+): void {
+  sendJson(res, 200, {
+    jsonrpc: "2.0",
+    id: id ?? null,
+    error: {
+      code,
+      message,
+      ...(data === undefined ? {} : { data }),
+    },
+  });
 }

@@ -1,37 +1,65 @@
 import * as http from "node:http";
 import { getConnectorSecret } from "./config";
 import { AppError } from "./lib/errors";
-import { createRequestLogger } from "./lib/logging";
+import type { createRequestLogger } from "./lib/logging";
 
-export function assertAuthorized(req: http.IncomingMessage): void {
-  const log = createRequestLogger(req);
+type RequestLogger = ReturnType<typeof createRequestLogger>;
 
+function getBearerToken(authorization: string | undefined): string | null {
+  if (!authorization) {
+    return null;
+  }
+
+  if (!authorization.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authorization.slice("Bearer ".length).trim();
+  return token.length > 0 ? token : null;
+}
+
+function getApiKeyHeader(
+  header: string | string[] | undefined,
+): string | null {
+  if (Array.isArray(header)) {
+    const first = header[0]?.trim();
+    return first ? first : null;
+  }
+
+  if (typeof header === "string") {
+    const trimmed = header.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  return null;
+}
+
+export function assertAuthorized(
+  req: http.IncomingMessage,
+  log?: RequestLogger,
+): void {
   const authHeader = req.headers.authorization;
-  const bearer = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice("Bearer ".length)
-    : undefined;
+  const bearerToken = getBearerToken(authHeader);
+  const apiKey = getApiKeyHeader(req.headers["x-api-key"]);
+  const providedSecret = bearerToken ?? apiKey;
+  const expectedSecret = getConnectorSecret();
 
-  const headerSecret = req.headers["x-api-key"];
-  const apiKey = Array.isArray(headerSecret) ? headerSecret[0] : headerSecret;
-
-  const provided = bearer ?? apiKey;
-
-  if (!provided) {
-    log.warn("authorization_missing", {
+  if (!providedSecret) {
+    log?.warn("authorization_missing", {
       method: req.method ?? null,
       url: req.url ?? null,
       authHeaderPresent: Boolean(authHeader),
-      apiKeyHeaderPresent: Boolean(headerSecret),
+      apiKeyHeaderPresent: Boolean(req.headers["x-api-key"]),
     });
 
     throw new AppError("Unauthorized", 401);
   }
 
-  if (provided !== getConnectorSecret()) {
-    log.warn("authorization_invalid", {
+  if (providedSecret !== expectedSecret) {
+    log?.warn("authorization_invalid", {
       method: req.method ?? null,
       url: req.url ?? null,
-      authMethod: bearer ? "bearer" : "x-api-key",
+      authMethod: bearerToken ? "bearer" : "x-api-key",
     });
 
     throw new AppError("Unauthorized", 401);

@@ -1,10 +1,10 @@
 export class AppError extends Error {
   public readonly status: number;
 
-  constructor(message: string, status = 500) {
-    super(message);
+  constructor(message: string, status = 500, options?: ErrorOptions) {
+    super(message, options);
     this.name = "AppError";
-    this.status = status;
+    this.status = Number.isInteger(status) && status >= 100 ? status : 500;
   }
 }
 

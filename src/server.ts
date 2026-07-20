@@ -1,3 +1,4 @@
+import "dotenv/config";
 import * as http from "node:http";
 import { getPort } from "./config";
 import { handleMcpRequest } from "./router";
