@@ -18,9 +18,7 @@ function getBearerToken(authorization: string | undefined): string | null {
   return token.length > 0 ? token : null;
 }
 
-function getApiKeyHeader(
-  header: string | string[] | undefined,
-): string | null {
+function getApiKeyHeader(header: string | string[] | undefined): string | null {
   if (Array.isArray(header)) {
     const first = header[0]?.trim();
     return first ? first : null;

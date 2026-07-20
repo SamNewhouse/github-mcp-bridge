@@ -48,6 +48,14 @@ type GitHubIssueComment = {
   };
 };
 
+type GitHubCreatePullRequestInput = {
+  title: string;
+  body?: string;
+  head: string;
+  base: string;
+  draft?: boolean;
+};
+
 export async function listOpenPullRequests(owner: string, repo: string) {
   const prs = await githubRequest<GitHubPullRequest[]>(
     `/repos/${owner}/${repo}/pulls?state=open&per_page=100`,
@@ -185,5 +193,68 @@ export async function updatePullRequest(
     additions: pr.additions ?? 0,
     deletions: pr.deletions ?? 0,
     changed_files: pr.changed_files ?? 0,
+  };
+}
+
+export async function createPullRequest(
+  owner: string,
+  repo: string,
+  input: GitHubCreatePullRequestInput,
+) {
+  const pr = await githubRequest<GitHubPullRequest>(
+    `/repos/${owner}/${repo}/pulls`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: input.title,
+        body: input.body ?? "",
+        head: input.head,
+        base: input.base,
+        ...(input.draft !== undefined ? { draft: input.draft } : {}),
+      }),
+    },
+  );
+
+  return {
+    number: pr.number,
+    title: pr.title,
+    body: pr.body,
+    state: pr.state,
+    draft: pr.draft ?? false,
+    html_url: pr.html_url,
+    author: pr.user.login,
+    head: pr.head.ref,
+    headSha: pr.head.sha,
+    base: pr.base.ref,
+    created_at: pr.created_at,
+    updated_at: pr.updated_at,
+    mergeable: pr.mergeable ?? null,
+    additions: pr.additions ?? 0,
+    deletions: pr.deletions ?? 0,
+    changed_files: pr.changed_files ?? 0,
+  };
+}
+
+export async function getPullRequestDiff(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+) {
+  const diff = await githubRequest<string>(
+    `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    {
+      headers: {
+        Accept: "application/vnd.github.diff",
+      },
+      responseType: "text",
+    },
+  );
+
+  return {
+    pullNumber,
+    diff,
   };
 }

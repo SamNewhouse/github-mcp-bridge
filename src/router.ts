@@ -214,9 +214,15 @@ export async function handleMcpRequest(
           issues: params.error.issues,
         });
 
-        return sendJsonRpcError(res, body.id ?? null, -32602, "Invalid params", {
-          issues: params.error.issues,
-        });
+        return sendJsonRpcError(
+          res,
+          body.id ?? null,
+          -32602,
+          "Invalid params",
+          {
+            issues: params.error.issues,
+          },
+        );
       }
 
       const toolName = params.data.name;
@@ -253,10 +259,16 @@ export async function handleMcpRequest(
           errorName: error instanceof Error ? error.name : "UnknownError",
         });
 
-        return sendJsonRpcError(res, body.id ?? null, -32603, "Internal error", {
-          tool: toolName,
-          message,
-        });
+        return sendJsonRpcError(
+          res,
+          body.id ?? null,
+          -32603,
+          "Internal error",
+          {
+            tool: toolName,
+            message,
+          },
+        );
       }
     }
 
