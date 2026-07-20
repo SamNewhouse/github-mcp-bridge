@@ -2,12 +2,7 @@ import * as http from "node:http";
 import { assertAuthorized } from "./auth";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
 import { getRequestUrl, readJsonBody, sendJson } from "./lib/http";
-import {
-  executeTool,
-  getToolList,
-  toolRequestSchema,
-  type ToolName,
-} from "./tools";
+import { executeTool, getToolList, toolRequestSchema } from "./tools";
 
 export async function handleMcpRequest(
   req: http.IncomingMessage,
@@ -42,11 +37,7 @@ export async function handleMcpRequest(
       return sendJson(res, 405, { error: "Method not allowed" });
     }
 
-    const body = toolRequestSchema.parse(await readJsonBody(req)) as {
-      tool: ToolName;
-      input?: unknown;
-    };
-
+    const body = toolRequestSchema.parse(await readJsonBody(req));
     const result = await executeTool(body.tool, body.input);
 
     return sendJson(res, 200, {
