@@ -1,4 +1,4 @@
-import { env } from "../config";
+import { getGithubPat } from "../config";
 import { AppError } from "../lib/errors";
 
 const GITHUB_API_BASE = "https://api.github.com";
@@ -8,14 +8,20 @@ export async function githubRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  const headers = new Headers(init.headers);
+
+  headers.set("Accept", "application/vnd.github+json");
+  headers.set("Authorization", `Bearer ${getGithubPat()}`);
+  headers.set("User-Agent", "github-mcp-bridge");
+  headers.set("X-GitHub-Api-Version", GITHUB_API_VERSION);
+
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(`${GITHUB_API_BASE}${path}`, {
     ...init,
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${env.GITHUB_PAT}`,
-      "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      ...(init.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {

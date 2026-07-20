@@ -1,11 +1,10 @@
 import * as http from "node:http";
-import { env } from "./config";
+import { getPort } from "./config";
 import { handleMcpRequest } from "./app";
 
 const server = http.createServer(handleMcpRequest);
+const port = getPort();
 
-server.listen(env.PORT, () => {
-  console.log(
-    `github-mcp-bridge listening on http://localhost:${env.PORT}/mcp`,
-  );
+server.listen(port, () => {
+  console.log(`github-mcp-bridge listening on http://localhost:${port}/mcp`);
 });

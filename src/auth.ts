@@ -1,5 +1,5 @@
 import * as http from "node:http";
-import { env } from "./config";
+import { getConnectorSecret } from "./config";
 import { AppError } from "./lib/errors";
 
 export function assertAuthorized(req: http.IncomingMessage): void {
@@ -12,7 +12,7 @@ export function assertAuthorized(req: http.IncomingMessage): void {
   const provided =
     bearer ?? (Array.isArray(headerSecret) ? headerSecret[0] : headerSecret);
 
-  if (!provided || provided !== env.CONNECTOR_SECRET) {
+  if (!provided || provided !== getConnectorSecret()) {
     throw new AppError("Unauthorized", 401);
   }
 }
