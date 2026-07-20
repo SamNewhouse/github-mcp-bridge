@@ -3,7 +3,7 @@ import { z } from "zod";
 
 let loaded = false;
 
-function ensureEnvLoaded(): void {
+function loadEnvFile(): void {
   if (loaded) {
     return;
   }
@@ -12,13 +12,23 @@ function ensureEnvLoaded(): void {
   loaded = true;
 }
 
-export function parseEnv<T extends z.ZodTypeAny>(schema: T): z.infer<T> {
-  ensureEnvLoaded();
+type ParseEnvOptions = {
+  label?: string;
+  source?: Record<string, string | undefined>;
+};
 
-  const parsed = schema.safeParse(process.env);
+export function parseEnv<T extends z.ZodTypeAny>(
+  schema: T,
+  options: ParseEnvOptions = {}
+): z.infer<T> {
+  loadEnvFile();
+
+  const source = options.source ?? process.env;
+  const parsed = schema.safeParse(source);
 
   if (!parsed.success) {
-    console.error("Invalid environment variables:");
+    const label = options.label ?? "environment variables";
+    console.error(`Invalid ${label}:`);
     console.error(JSON.stringify(parsed.error.format(), null, 2));
     process.exit(1);
   }

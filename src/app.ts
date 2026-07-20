@@ -1,5 +1,4 @@
 import * as http from "node:http";
-import { env } from "./config";
 import { assertAuthorized } from "./auth";
 import { toolDefinitions, toolRequestSchema, type ToolName } from "./tools";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
@@ -30,10 +29,10 @@ export async function handleMcpRequest(
       return sendJson(res, 200, {
         name: "github-mcp-bridge",
         version: "0.1.0",
-        tools: Object.entries(toolDefinitions).map(([name, def]) => ({
-          name,
-          description: def.description,
-          inputSchema: def.inputSchema,
+        tools: Object.values(toolDefinitions).map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
         })),
       });
     }
@@ -53,7 +52,8 @@ export async function handleMcpRequest(
       return sendJson(res, 400, { error: "Unknown or missing tool" });
     }
 
-    const result = await tool.handler(body.input);
+    const parsedInput = tool.parse(body.input);
+    const result = await tool.handler(parsedInput);
 
     return sendJson(res, 200, {
       tool: body.tool,
@@ -65,11 +65,3 @@ export async function handleMcpRequest(
     });
   }
 }
-
-const server = http.createServer(handleMcpRequest);
-
-server.listen(env.PORT, () => {
-  console.log(
-    `github-mcp-bridge listening on http://localhost:${env.PORT}/mcp`,
-  );
-});
