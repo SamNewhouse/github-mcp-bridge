@@ -2,10 +2,11 @@ import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { createBranchTool } from "./create-branch";
 import { getFileContentsTool } from "./get-file-contents";
+import { getMultipleFilesTool } from "./get-multiple-files";
 import { listBranchesTool } from "./list-branches";
+import { listDirectoryTool } from "./list-directory";
 import { listOpenPullRequestsTool } from "./list-open-pull-requests";
 import { listRepositoriesTool } from "./list-repositories";
-import { getMultipleFilesTool } from "./get-multiple-files";
 
 const tools = [
   listRepositoriesTool,
@@ -14,6 +15,7 @@ const tools = [
   createBranchTool,
   getFileContentsTool,
   getMultipleFilesTool,
+  listDirectoryTool,
 ] as const;
 
 export const toolDefinitions = Object.fromEntries(

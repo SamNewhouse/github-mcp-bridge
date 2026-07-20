@@ -1,3 +1,4 @@
+import { AppError } from "../lib/errors";
 import { githubRequest } from "./client";
 
 type GitHubContentFile = {
@@ -10,20 +11,41 @@ type GitHubContentFile = {
   content: string;
 };
 
+type GitHubContentDirectoryEntry = {
+  type: "file" | "dir" | "symlink" | "submodule";
+  name: string;
+  path: string;
+  sha: string;
+  size: number;
+};
+
+function buildContentsPath(path: string, ref?: string): string {
+  const trimmedPath = path.trim();
+  const encodedPath = trimmedPath
+    ? trimmedPath
+        .split("/")
+        .map((segment) => encodeURIComponent(segment))
+        .join("/")
+    : "";
+
+  const basePath = encodedPath ? `/contents/${encodedPath}` : "/contents";
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+
+  return `${basePath}${query}`;
+}
+
 export async function getFileContents(
   owner: string,
   repo: string,
   path: string,
   ref?: string,
 ) {
-  const query = ref ? `?ref=${encodeURIComponent(ref)}` : "";
-
   const file = await githubRequest<GitHubContentFile>(
-    `/repos/${owner}/${repo}/contents/${path}${query}`,
+    `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
   );
 
   if (file.type !== "file") {
-    throw new Error(`Path is not a file: ${path}`);
+    throw new AppError(`Path is not a file: ${path}`, 400);
   }
 
   const normalized = file.content.replace(/\n/g, "");
@@ -47,9 +69,28 @@ export async function getMultipleFiles(
   paths: string[],
   ref?: string,
 ) {
-  const files = await Promise.all(
-    paths.map((path) => getFileContents(owner, repo, path, ref)),
+  return Promise.all(paths.map((path) => getFileContents(owner, repo, path, ref)));
+}
+
+export async function listDirectory(
+  owner: string,
+  repo: string,
+  path = "",
+  ref?: string,
+) {
+  const entries = await githubRequest<GitHubContentDirectoryEntry[]>(
+    `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
   );
 
-  return files;
+  if (!Array.isArray(entries)) {
+    throw new AppError(`Path is not a directory: ${path || "/"}`, 400);
+  }
+
+  return entries.map((entry) => ({
+    name: entry.name,
+    path: entry.path,
+    sha: entry.sha,
+    size: entry.size,
+    type: entry.type,
+  }));
 }
