@@ -27,6 +27,21 @@ export const listDirectoryInputSchema = repositoryInputSchema.extend({
   ref: z.string().min(1).optional(),
 });
 
+export const pullRequestInputSchema = repositoryInputSchema.extend({
+  pullNumber: z.coerce.number().int().positive(),
+});
+
+export const updatePullRequestInputSchema = pullRequestInputSchema.extend({
+  title: z.string().min(1).optional(),
+  body: z.string().optional(),
+  base: z.string().min(1).optional(),
+  state: z.enum(["open", "closed"]).optional(),
+});
+
+export const createPullRequestCommentInputSchema = pullRequestInputSchema.extend({
+  body: z.string().min(1, "body is required"),
+});
+
 export const toolRequestSchema = z.object({
   tool: z.string(),
   input: z.unknown().optional(),
