@@ -2,7 +2,7 @@
 
 A tiny TypeScript MCP bridge for GitHub.
 
-It exposes a small set of GitHub tools over MCP so clients like Perplexity can discover repositories, inspect branches and pull requests, and create branches without relying on the built-in GitHub connector.
+It exposes a small set of GitHub tools over MCP so clients can discover repositories, inspect branches and pull requests, and create branches without relying on a built-in GitHub connector.
 
 ## Features
 
@@ -37,28 +37,109 @@ npm run lint
 npm run dev
 ```
 
-The local HTTP server runs on `http://localhost:3000/mcp` by default.
+The local HTTP server runs on `http://localhost:3000/` by default.
+
+Health check:
+
+```bash
+curl -i http://localhost:3000/health
+```
+
+MCP manifest:
+
+```bash
+curl -i \
+  -H "Authorization: Bearer $CONNECTOR_SECRET" \
+  http://localhost:3000/
+```
+
+Tool call:
+
+```bash
+curl -i \
+  -H "Authorization: Bearer $CONNECTOR_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "list_branches",
+    "input": {
+      "owner": "vercel",
+      "repo": "next.js"
+    }
+  }' \
+  http://localhost:3000/
+```
 
 ## Deploy to Vercel
 
 1. Import the repo into Vercel.
 2. Add `GITHUB_PAT` and `CONNECTOR_SECRET` as environment variables.
-3. Deploy.
-4. Use `https://your-project.vercel.app/mcp` as the remote MCP URL.
+3. Optionally add a custom domain.
+4. Deploy.
 
-## Connect to Perplexity
+Use the root URL as the remote MCP server URL:
 
-Perplexity custom connectors use a remote MCP server URL and support API key style authentication [page:1].
+```txt
+https://your-custom-domain.example/
+```
+
+If you use the default Vercel domain instead, use:
+
+```txt
+https://your-project.vercel.app/
+```
+
+Health check:
+
+```txt
+https://your-custom-domain.example/health
+```
+
+## Connect a client
+
+Any compatible client can connect to the deployed endpoint using the server URL and a shared secret.
 
 Use:
 
-- URL: `https://your-project.vercel.app/mcp`
-- Authentication: API Key
-- API key value: your `CONNECTOR_SECRET`
+- URL: `https://your-custom-domain.example/`
+- Authentication: API key or bearer token
+- Secret value: your `CONNECTOR_SECRET`
+
+## Example curl
+
+Set your secret in the shell:
+
+```bash
+export CONNECTOR_SECRET="your_shared_secret_here"
+```
+
+Fetch the MCP manifest:
+
+```bash
+curl -i \
+  -H "Authorization: Bearer $CONNECTOR_SECRET" \
+  https://your-custom-domain.example/
+```
+
+Run a tool:
+
+```bash
+curl -i \
+  -H "Authorization: Bearer $CONNECTOR_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "list_branches",
+    "input": {
+      "owner": "vercel",
+      "repo": "next.js"
+    }
+  }' \
+  https://your-custom-domain.example/
+```
 
 ## Security notes
 
 - Keep `GITHUB_PAT` server-side only.
 - Prefer a fine-grained PAT with the minimum repository access needed.
 - Rotate `CONNECTOR_SECRET` if it is ever shared.
-- Never expose secrets in frontend code or logs.
+- Rotate `GITHUB_PAT` immediately if it is ever exposed.
+- Never expose secrets in frontend code, client-side config, screenshots, or logs.
