@@ -9,4 +9,6 @@
 
 import { handleMcpRequest } from "../src/app";
 
-export default handleMcpRequest;
+export default function handler(req: any, res: any) {
+  return handleMcpRequest(req, res);
+}
