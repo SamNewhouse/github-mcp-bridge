@@ -19,7 +19,7 @@ export async function handleMcpRequest(
       return sendJson(res, 200, { ok: true });
     }
 
-    if (url.pathname !== "/mcp") {
+    if (url.pathname !== "/") {
       return sendJson(res, 404, { error: "Not found" });
     }
 
