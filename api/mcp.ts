@@ -7,8 +7,12 @@
 // Requests rewritten to `/mcp` or `/health` can be handled by the same core
 // request handler in `src/app.ts`.
 
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleMcpRequest } from "../src/app";
 
-export default function handler(req: any, res: any) {
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse,
+) {
   return handleMcpRequest(req, res);
 }
