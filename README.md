@@ -33,7 +33,7 @@ PORT=3000
 
 ```bash
 npm install
-npm run lint
+npm run test
 npm run dev
 ```
 
