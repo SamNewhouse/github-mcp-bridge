@@ -1,11 +1,10 @@
 import { z } from "zod";
 
-export type ToolDefinition<TSchema extends z.ZodTypeAny = z.ZodTypeAny> = {
+export type ToolDefinition = {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  parse: (input: unknown) => z.infer<TSchema>;
-  handler: (input: z.infer<TSchema>) => Promise<unknown>;
+  run: (input: unknown) => Promise<unknown>;
 };
 
 export function defineTool<TSchema extends z.ZodTypeAny>(config: {
@@ -13,12 +12,14 @@ export function defineTool<TSchema extends z.ZodTypeAny>(config: {
   description: string;
   input: TSchema;
   handler: (input: z.infer<TSchema>) => Promise<unknown>;
-}): ToolDefinition<TSchema> {
+}): ToolDefinition {
   return {
     name: config.name,
     description: config.description,
     inputSchema: z.toJSONSchema(config.input) as Record<string, unknown>,
-    parse: (input: unknown) => config.input.parse(input),
-    handler: config.handler,
+    run: async (input: unknown) => {
+      const parsed = config.input.parse(input);
+      return config.handler(parsed);
+    },
   };
 }

@@ -1,8 +1,13 @@
 import * as http from "node:http";
 import { assertAuthorized } from "./auth";
-import { toolDefinitions, toolRequestSchema, type ToolName } from "./tools";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
 import { getRequestUrl, readJsonBody, sendJson } from "./lib/http";
+import {
+  executeTool,
+  getToolList,
+  toolRequestSchema,
+  type ToolName,
+} from "./tools";
 
 export async function handleMcpRequest(
   req: http.IncomingMessage,
@@ -29,11 +34,7 @@ export async function handleMcpRequest(
       return sendJson(res, 200, {
         name: "github-mcp-bridge",
         version: "0.1.0",
-        tools: Object.values(toolDefinitions).map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-        })),
+        tools: getToolList(),
       });
     }
 
@@ -46,14 +47,7 @@ export async function handleMcpRequest(
       input?: unknown;
     };
 
-    const tool = toolDefinitions[body.tool];
-
-    if (!tool) {
-      return sendJson(res, 400, { error: "Unknown or missing tool" });
-    }
-
-    const parsedInput = tool.parse(body.input);
-    const result = await tool.handler(parsedInput);
+    const result = await executeTool(body.tool, body.input);
 
     return sendJson(res, 200, {
       tool: body.tool,
