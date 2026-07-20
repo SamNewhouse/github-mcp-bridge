@@ -18,7 +18,10 @@ export async function githubRequest<T>(
   const headers = new Headers(init.headers);
   const responseType = init.responseType ?? "json";
 
-  headers.set("Accept", "application/vnd.github+json");
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/vnd.github+json");
+  }
+
   headers.set("Authorization", `Bearer ${getGithubPat()}`);
   headers.set("User-Agent", "github-mcp-bridge");
   headers.set("X-GitHub-Api-Version", GITHUB_API_VERSION);

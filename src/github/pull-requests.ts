@@ -247,7 +247,7 @@ export async function getPullRequestDiff(
     `/repos/${owner}/${repo}/pulls/${pullNumber}`,
     {
       headers: {
-        Accept: "application/vnd.github.v3.diff",
+        Accept: "application/vnd.github.diff",
       },
       responseType: "text",
     },
