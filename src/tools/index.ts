@@ -3,10 +3,14 @@ import { AppError } from "../lib/errors";
 import { createBranchTool } from "./create-branch";
 import { getFileContentsTool } from "./get-file-contents";
 import { getMultipleFilesTool } from "./get-multiple-files";
+import { getPullRequestTool } from "./get-pull-request";
 import { listBranchesTool } from "./list-branches";
 import { listDirectoryTool } from "./list-directory";
 import { listOpenPullRequestsTool } from "./list-open-pull-requests";
+import { listPullRequestCommentsTool } from "./list-pull-request-comments";
+import { listPullRequestFilesTool } from "./list-pull-request-files";
 import { listRepositoriesTool } from "./list-repositories";
+import { updatePullRequestTool } from "./update-pull-request";
 
 const tools = [
   listRepositoriesTool,
@@ -16,6 +20,10 @@ const tools = [
   getFileContentsTool,
   getMultipleFilesTool,
   listDirectoryTool,
+  getPullRequestTool,
+  listPullRequestFilesTool,
+  listPullRequestCommentsTool,
+  updatePullRequestTool,
 ] as const;
 
 export const toolDefinitions = Object.fromEntries(
