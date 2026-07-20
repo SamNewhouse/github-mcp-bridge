@@ -19,7 +19,7 @@ type ParseEnvOptions = {
 
 export function parseEnv<T extends z.ZodTypeAny>(
   schema: T,
-  options: ParseEnvOptions = {}
+  options: ParseEnvOptions = {},
 ): z.infer<T> {
   loadEnvFile();
 

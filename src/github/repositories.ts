@@ -12,7 +12,9 @@ type GitHubRepository = {
 };
 
 export async function listRepositories() {
-  const repos = await githubRequest<GitHubRepository[]>("/user/repos?sort=updated&per_page=100");
+  const repos = await githubRequest<GitHubRepository[]>(
+    "/user/repos?sort=updated&per_page=100",
+  );
 
   return repos.map((repo) => ({
     id: repo.id,
