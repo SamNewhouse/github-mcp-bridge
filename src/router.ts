@@ -11,6 +11,7 @@ import {
 } from "./lib/http";
 import { createRequestLogger, sanitizeHeaders } from "./lib/logging";
 import { executeTool, getToolList } from "./tools";
+import type { McpToolResult } from "./tools/shared";
 
 const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -23,6 +24,43 @@ const toolCallParamsSchema = z.object({
   name: z.string(),
   arguments: z.record(z.string(), z.unknown()).default({}),
 });
+
+function isMcpToolResult(value: unknown): value is McpToolResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  if (!Array.isArray(candidate.content)) {
+    return false;
+  }
+
+  return candidate.content.every((item) => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+
+    const contentItem = item as Record<string, unknown>;
+    return contentItem.type === "text" && typeof contentItem.text === "string";
+  });
+}
+
+function toMcpToolResult(result: unknown): McpToolResult {
+  if (isMcpToolResult(result)) {
+    return result;
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+    structuredContent: result,
+  };
+}
 
 export async function handleMcpRequest(
   req: http.IncomingMessage,
@@ -197,20 +235,14 @@ export async function handleMcpRequest(
         });
 
         const result = await executeTool(toolName, toolArgs);
+        const mcpResult = toMcpToolResult(result);
 
         log.info("tool_invocation_succeeded", {
           id: body.id ?? null,
           tool: toolName,
         });
 
-        return sendJsonRpcResult(res, body.id ?? null, {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        });
+        return sendJsonRpcResult(res, body.id ?? null, mcpResult);
       } catch (error) {
         const message = getErrorMessage(error);
 
