@@ -8,7 +8,7 @@
 // request handler in `src/app.ts`.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { handleMcpRequest } from "../src/app";
+import { handleMcpRequest } from "../src/router";
 
 export default async function handler(
   req: IncomingMessage,
