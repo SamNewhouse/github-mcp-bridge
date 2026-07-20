@@ -5,13 +5,18 @@ import { logError, logInfo } from "../lib/logging";
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 
+type GithubRequestOptions = RequestInit & {
+  responseType?: "json" | "text";
+};
+
 export async function githubRequest<T>(
   path: string,
-  init: RequestInit = {},
+  init: GithubRequestOptions = {},
 ): Promise<T> {
   const startedAt = Date.now();
   const method = init.method ?? "GET";
   const headers = new Headers(init.headers);
+  const responseType = init.responseType ?? "json";
 
   headers.set("Accept", "application/vnd.github+json");
   headers.set("Authorization", `Bearer ${getGithubPat()}`);
@@ -26,6 +31,7 @@ export async function githubRequest<T>(
     method,
     path,
     hasBody: Boolean(init.body),
+    responseType,
     headers: {
       accept: headers.get("Accept"),
       authorization: headers.get("Authorization") ? "[present]" : "[missing]",
@@ -67,6 +73,10 @@ export async function githubRequest<T>(
       status: response.status,
       durationMs,
     });
+
+    if (responseType === "text") {
+      return (await response.text()) as T;
+    }
 
     return (await response.json()) as T;
   } catch (error) {

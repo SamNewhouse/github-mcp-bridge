@@ -249,6 +249,7 @@ export async function getPullRequestDiff(
       headers: {
         Accept: "application/vnd.github.v3.diff",
       },
+      responseType: "text",
     },
   );
 
