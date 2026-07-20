@@ -1,4 +1,3 @@
-
 import { getFileContents } from "../github";
 import { getFileContentsInputSchema } from "../lib/validation";
 import { defineTool } from "./shared";

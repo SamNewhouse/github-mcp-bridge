@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { createBranchTool } from "./create-branch";
+import { createPullRequestTool } from "./create-pull-request";
 import { getFileContentsTool } from "./get-file-contents";
 import { getMultipleFilesTool } from "./get-multiple-files";
+import { getPullRequestDiffTool } from "./get-pull-request-diff";
 import { getPullRequestTool } from "./get-pull-request";
 import { listBranchesTool } from "./list-branches";
 import { listDirectoryTool } from "./list-directory";
@@ -11,6 +13,7 @@ import { listPullRequestCommentsTool } from "./list-pull-request-comments";
 import { listPullRequestFilesTool } from "./list-pull-request-files";
 import { listRepositoriesTool } from "./list-repositories";
 import { updatePullRequestTool } from "./update-pull-request";
+import { upsertFileTool } from "./upsert-file";
 
 const tools = [
   listRepositoriesTool,
@@ -24,6 +27,9 @@ const tools = [
   listPullRequestFilesTool,
   listPullRequestCommentsTool,
   updatePullRequestTool,
+  upsertFileTool,
+  createPullRequestTool,
+  getPullRequestDiffTool,
 ] as const;
 
 export const toolDefinitions = Object.fromEntries(

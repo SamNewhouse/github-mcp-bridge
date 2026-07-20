@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { AppError } from "../lib/errors";
 import { githubRequest } from "./client";
 
@@ -17,6 +18,20 @@ type GitHubContentDirectoryEntry = {
   path: string;
   sha: string;
   size: number;
+};
+
+type GitHubUpsertFileResponse = {
+  content: {
+    name: string;
+    path: string;
+    sha: string;
+    size: number;
+  };
+  commit: {
+    sha: string;
+    html_url: string;
+    message: string;
+  };
 };
 
 function buildContentsPath(path: string, ref?: string): string {
@@ -69,7 +84,9 @@ export async function getMultipleFiles(
   paths: string[],
   ref?: string,
 ) {
-  return Promise.all(paths.map((path) => getFileContents(owner, repo, path, ref)));
+  return Promise.all(
+    paths.map((path) => getFileContents(owner, repo, path, ref)),
+  );
 }
 
 export async function listDirectory(
@@ -93,4 +110,62 @@ export async function listDirectory(
     size: entry.size,
     type: entry.type,
   }));
+}
+
+export async function upsertFile(
+  owner: string,
+  repo: string,
+  input: {
+    path: string;
+    content: string;
+    message: string;
+    branch: string;
+  },
+) {
+  let existingSha: string | undefined;
+
+  try {
+    const existing = await githubRequest<GitHubContentFile>(
+      `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
+    );
+
+    if (existing.type === "file") {
+      existingSha = existing.sha;
+    }
+  } catch (error) {
+    if (!(error instanceof AppError) || error.status !== 404) {
+      throw error;
+    }
+  }
+
+  const response = await githubRequest<GitHubUpsertFileResponse>(
+    `/repos/${owner}/${repo}${buildContentsPath(input.path)}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: input.message,
+        content: Buffer.from(input.content, "utf8").toString("base64"),
+        branch: input.branch,
+        ...(existingSha ? { sha: existingSha } : {}),
+      }),
+    },
+  );
+
+  return {
+    file: {
+      name: response.content.name,
+      path: response.content.path,
+      sha: response.content.sha,
+      size: response.content.size,
+    },
+    commit: {
+      sha: response.commit.sha,
+      html_url: response.commit.html_url,
+      message: response.commit.message,
+    },
+    created: !existingSha,
+  };
 }

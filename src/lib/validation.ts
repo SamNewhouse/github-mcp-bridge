@@ -38,8 +38,24 @@ export const updatePullRequestInputSchema = pullRequestInputSchema.extend({
   state: z.enum(["open", "closed"]).optional(),
 });
 
-export const createPullRequestCommentInputSchema = pullRequestInputSchema.extend({
-  body: z.string().min(1, "body is required"),
+export const createPullRequestCommentInputSchema =
+  pullRequestInputSchema.extend({
+    body: z.string().min(1, "body is required"),
+  });
+
+export const upsertFileInputSchema = repositoryInputSchema.extend({
+  path: z.string().min(1, "path is required"),
+  content: z.string(),
+  message: z.string().min(1, "message is required"),
+  branch: z.string().min(1, "branch is required"),
+});
+
+export const createPullRequestInputSchema = repositoryInputSchema.extend({
+  title: z.string().min(1, "title is required"),
+  body: z.string().optional(),
+  head: z.string().min(1, "head is required"),
+  base: z.string().min(1, "base is required"),
+  draft: z.boolean().optional(),
 });
 
 export const toolRequestSchema = z.object({
