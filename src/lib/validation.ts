@@ -92,3 +92,33 @@ export const linkIssueToPullRequestInputSchema = repositoryInputSchema.extend({
   issueNumber: z.coerce.number().int().positive(),
   keyword: z.enum(["closes", "fixes", "resolves"]).default("closes"),
 });
+
+export const issueCommentInputSchema = issueInputSchema.extend({
+  body: z.string().min(1, "body is required"),
+});
+
+// Search
+export const searchCodeInputSchema = repositoryInputSchema.extend({
+  query: z.string().min(1, "query is required"),
+});
+
+export const searchFilesInputSchema = repositoryInputSchema.extend({
+  pattern: z.string().min(1, "pattern is required"),
+  ref: z.string().min(1).optional(),
+});
+
+// Commits
+export const getCommitInputSchema = repositoryInputSchema.extend({
+  ref: z.string().min(1, "ref (SHA or branch) is required"),
+});
+
+export const listCommitsInputSchema = repositoryInputSchema.extend({
+  branch: z.string().min(1).optional(),
+  path: z.string().min(1).optional(),
+  perPage: z.coerce.number().int().positive().max(100).default(30),
+});
+
+// Branches
+export const getBranchInputSchema = repositoryInputSchema.extend({
+  branch: z.string().min(1, "branch is required"),
+});
