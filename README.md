@@ -14,7 +14,7 @@ MCP Client  ──bearer token──▶  github-mcp-bridge  ──GitHub PAT─�
 2. The bridge validates the token against `CONNECTOR_SECRET`
 3. The bridge calls the GitHub API using `GITHUB_PAT` and returns the result
 
-The bridge also exposes `tools/list` so any client can discover all available tools and their input schemas at runtime.
+The bridge also exposes `tools/list` so any client can discover all available tools and their input schemas at runtime — no manual tool configuration needed.
 
 ## Available tools
 
@@ -77,7 +77,7 @@ The bridge also exposes `tools/list` so any client can discover all available to
 ### Prerequisites
 
 - Node.js >= 24
-- A GitHub Personal Access Token with `repo` scope (or a fine-grained PAT with the minimum permissions needed)
+- A GitHub Personal Access Token with `repo` scope (or a fine-grained PAT scoped to the repositories you need)
 
 ### Local development
 
@@ -107,11 +107,18 @@ The server starts on `http://localhost:3000` by default (configurable via `PORT`
 | `CONNECTOR_SECRET` | ✅ | Shared secret used to authenticate requests to the bridge |
 | `PORT` | ✗ | HTTP port (default: `3000`) |
 
-Copy `.env.example` to get started:
+## Deploying
+
+The bridge is a standard Node.js HTTP server. It can be deployed anywhere that runs Node.js.
+
+Set the three environment variables (`GITHUB_PAT`, `CONNECTOR_SECRET`, and optionally `PORT`) in your hosting environment, then run:
 
 ```bash
-cp .env.example .env
+npm run build
+npm start
 ```
+
+Once deployed, use the root URL as the MCP endpoint and point your client at it.
 
 ## Verifying the server
 
@@ -151,40 +158,26 @@ curl -s -X POST http://localhost:3000 \
   }'
 ```
 
-## Deploying to Vercel
-
-1. Import the repository into Vercel
-2. Add the following environment variables in the Vercel dashboard:
-   - `GITHUB_PAT`
-   - `CONNECTOR_SECRET`
-3. Deploy
-
-The bridge is accessible at your Vercel deployment URL. Use the root path (`/`) as the MCP endpoint.
-
-```
-https://your-project.vercel.app/
-```
-
 ## Connecting an MCP client
 
 Configure your MCP client with:
 
 | Setting | Value |
 |---|---|
-| **URL** | Your deployment URL (e.g. `https://your-project.vercel.app/`) |
+| **URL** | Your deployment URL |
 | **Auth type** | Bearer token / API key |
 | **Secret** | Your `CONNECTOR_SECRET` value |
 
-The client can call `tools/list` at any time to discover all available tools and their input schemas dynamically — no manual configuration of individual tools is needed.
+The client can call `tools/list` at any time to discover all available tools and their input schemas dynamically.
 
 ## Scripts
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start dev server with hot-reload (`tsx watch`) |
+| `npm run dev` | Start dev server with hot-reload |
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm start` | Run compiled server from `dist/` |
-| `npm test` | Type-check without emitting (`tsc --noEmit`) |
+| `npm test` | Type-check without emitting |
 | `npm run format` | Format code with Prettier |
 
 ## Security
