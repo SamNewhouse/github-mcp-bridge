@@ -1,5 +1,10 @@
 import { spawn, spawnSync, ChildProcess } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
+import { config } from "dotenv";
+
+// Load .env so CONNECTOR_SECRET and GITHUB_PAT are available to both
+// the test process and the spawned server process.
+config();
 
 let server: ChildProcess | null = null;
 
@@ -15,7 +20,7 @@ export default async function globalSetup() {
     throw new Error("[setup] Build failed — cannot start integration server");
   }
 
-  server = spawn("node", ["dist/src/server.js"], {
+  server = spawn("node", ["dist/server.js"], {
     env: {
       ...process.env,
       PORT: port,
