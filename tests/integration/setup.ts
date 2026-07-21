@@ -18,7 +18,7 @@ export default async function globalSetup() {
     throw new Error("[setup] Build failed — cannot start integration server");
   }
 
-  const server: ChildProcess = spawn("node", ["dist/server.js"], {
+  const server: ChildProcess = spawn("node", ["dist/src/server.js"], {
     env: {
       ...process.env,
       PORT: port,

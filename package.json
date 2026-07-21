@@ -8,9 +8,11 @@
     "build": "tsc -p tsconfig.json",
     "format": "prettier --write .",
     "start": "node dist/src/server.js",
+    "pretest": "npm run build",
     "test": "jest",
+    "posttest": "rm -rf dist/tests",
     "test:unit": "jest --selectProjects unit",
-    "test:integration": "npm run build && jest --selectProjects integration",
+    "test:integration": "jest --selectProjects integration",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -31,7 +33,6 @@
   },
   "license": "MIT",
   "private": false,
-  "type": "module",
   "author": {
     "name": "Sam Newhouse",
     "url": "https://github.com/SamNewhouse"
