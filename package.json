@@ -1,25 +1,33 @@
 {
   "name": "github-mcp-bridge",
   "version": "1.0.0",
-  "description": "A small TypeScript GitHub MCP bridge.",
+  "description": "A TypeScript GitHub MCP bridge with an MCP agent client.",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:server": "tsx watch src/server.ts",
+    "dev:agent": "tsx src/agent/index.ts",
+    "dev:agent:watch": "tsx watch src/agent/index.ts",
     "build": "tsc -p tsconfig.json",
     "format": "prettier --write .",
-    "start": "node dist/server.js",
+    "start": "tsx src/server.ts",
+    "start:server": "tsx src/server.ts",
+    "start:agent": "tsx src/agent/index.ts",
     "test": "tsc --noEmit"
   },
   "keywords": [
     "github",
     "mcp",
     "typescript",
-    "bridge"
+    "bridge",
+    "agent"
   ],
   "author": "",
   "license": "MIT",
   "private": false,
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   },
