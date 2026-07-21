@@ -7,7 +7,10 @@ export default async function globalSetup() {
   const port = process.env.PORT ?? "3000";
 
   // Build first so dist/server.js is guaranteed to exist before spawning.
-  const build = spawnSync("npm", ["run", "build"], { stdio: "inherit" });
+  const build = spawnSync("npm run build", {
+    shell: true,
+    stdio: "inherit",
+  });
   if (build.status !== 0) {
     throw new Error("[setup] Build failed — cannot start integration server");
   }
