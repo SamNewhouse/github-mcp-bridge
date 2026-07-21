@@ -3,6 +3,9 @@ const SECRET = process.env.CONNECTOR_SECRET!;
 const OWNER = "SamNewhouse";
 const REPO = "github-mcp-bridge";
 
+// PR #1 is a real, permanent PR in this repo — safe to use as a stable test fixture.
+const KNOWN_PR_NUMBER = 1;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -179,30 +182,17 @@ describe("list_open_pull_requests (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("get_pull_request (integration)", () => {
   /**
-   * Smoke test — fetches a known-open PR (number 1 is likely a valid
-   * historical PR; the test tolerates it being closed).
-   * Asserts all mapPullRequest fields are present.
+   * Smoke test — fetches a known PR (#1) which is permanently in the repo.
+   * Asserts all mapPullRequest fields are present regardless of PR state.
    */
   it("returns full PR detail with all mapped fields", async () => {
-    // Use the most recent open PR if any, otherwise skip gracefully
-    const list = await callTool("list_open_pull_requests", {
-      owner: OWNER,
-      repo: REPO,
-    });
-
-    if (list.pull_requests.length === 0) {
-      console.warn("No open PRs — skipping get_pull_request smoke test");
-      return;
-    }
-
-    const prNumber = list.pull_requests[0].number;
     const result = await callTool("get_pull_request", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: prNumber,
+      pullNumber: KNOWN_PR_NUMBER,
     });
 
-    expect(result.pullRequest).toHaveProperty("number", prNumber);
+    expect(result.pullRequest).toHaveProperty("number", KNOWN_PR_NUMBER);
     expect(result.pullRequest).toHaveProperty("draft");
     expect(result.pullRequest).toHaveProperty("headSha");
     expect(result.pullRequest).toHaveProperty("additions");
@@ -229,28 +219,17 @@ describe("get_pull_request (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("get_pull_request_diff (integration)", () => {
   /**
-   * Smoke test — fetches the diff for the most recent open PR.
-   * Asserts diff is a non-empty string starting with "diff --git".
+   * Smoke test — fetches the diff for the known stable PR #1.
+   * Asserts diff is a non-empty string.
    */
-  it("returns a non-empty diff string for an open PR", async () => {
-    const list = await callTool("list_open_pull_requests", {
-      owner: OWNER,
-      repo: REPO,
-    });
-
-    if (list.pull_requests.length === 0) {
-      console.warn("No open PRs — skipping get_pull_request_diff smoke test");
-      return;
-    }
-
-    const prNumber = list.pull_requests[0].number;
+  it("returns a non-empty diff string for a known PR", async () => {
     const result = await callTool("get_pull_request_diff", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: prNumber,
+      pullNumber: KNOWN_PR_NUMBER,
     });
 
-    expect(result.diff.pullNumber).toBe(prNumber);
+    expect(result.diff.pullNumber).toBe(KNOWN_PR_NUMBER);
     expect(typeof result.diff.diff).toBe("string");
     expect(result.diff.diff.length).toBeGreaterThan(0);
   });
@@ -261,30 +240,20 @@ describe("get_pull_request_diff (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("list_pull_request_files (integration)", () => {
   /**
-   * Smoke test — fetches changed files for the most recent open PR.
+   * Smoke test — fetches changed files for the known stable PR #1.
    * Asserts files array is present and truncated is a boolean.
    */
-  it("returns files and truncated flag for an open PR", async () => {
-    const list = await callTool("list_open_pull_requests", {
-      owner: OWNER,
-      repo: REPO,
-    });
-
-    if (list.pull_requests.length === 0) {
-      console.warn("No open PRs — skipping list_pull_request_files smoke test");
-      return;
-    }
-
-    const prNumber = list.pull_requests[0].number;
+  it("returns files and truncated flag for a known PR", async () => {
     const result = await callTool("list_pull_request_files", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: prNumber,
+      pullNumber: KNOWN_PR_NUMBER,
     });
 
     expect(result.files).toHaveProperty("files");
+    expect(Array.isArray(result.files.files)).toBe(true);
     expect(typeof result.files.truncated).toBe("boolean");
-    expect(result.files.truncated).toBe(false); // no PR in this repo has 100+ files
+    expect(result.files.truncated).toBe(false);
   });
 });
 
@@ -293,25 +262,14 @@ describe("list_pull_request_files (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("list_pull_request_comments (integration)", () => {
   /**
-   * Smoke test — asserts comments array is returned (may be empty).
+   * Smoke test — asserts comments array is returned for known PR #1.
    * Each comment, if present, must have id, body, and author.
    */
-  it("returns a comments array for an open PR", async () => {
-    const list = await callTool("list_open_pull_requests", {
-      owner: OWNER,
-      repo: REPO,
-    });
-
-    if (list.pull_requests.length === 0) {
-      console.warn("No open PRs — skipping list_pull_request_comments smoke test");
-      return;
-    }
-
-    const prNumber = list.pull_requests[0].number;
+  it("returns a comments array for a known PR", async () => {
     const result = await callTool("list_pull_request_comments", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: prNumber,
+      pullNumber: KNOWN_PR_NUMBER,
     });
 
     expect(Array.isArray(result.comments)).toBe(true);
@@ -343,7 +301,6 @@ describe("list_issues (integration)", () => {
       expect(issue).toHaveProperty("number");
       expect(issue).toHaveProperty("title");
       expect(issue).toHaveProperty("state");
-      // Confirm PRs are filtered (no pull_request key on the mapped output)
       expect(issue).not.toHaveProperty("pull_request");
     }
   });
@@ -382,24 +339,12 @@ describe("list_issues (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("get_issue (integration)", () => {
   /**
-   * PR guard end-to-end — uses the number of an open PR as the issue number.
-   * Asserts the tool throws, confirming the pull_request guard works
-   * against the real GitHub API.
+   * PR guard end-to-end — PR #1 is permanently in the repo; using its number
+   * as an issue number must be rejected by the pull_request guard.
    */
   it("throws when the number belongs to a pull request", async () => {
-    const list = await callTool("list_open_pull_requests", {
-      owner: OWNER,
-      repo: REPO,
-    });
-
-    if (list.pull_requests.length === 0) {
-      console.warn("No open PRs — skipping get_issue PR-guard integration test");
-      return;
-    }
-
-    const prNumber = list.pull_requests[0].number;
     await expect(
-      callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: prNumber })
+      callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER })
     ).rejects.toThrow();
   });
 
@@ -419,26 +364,14 @@ describe("get_issue (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("list_issue_comments (integration)", () => {
   /**
-   * Smoke test — finds the first closed issue and fetches its comments.
+   * Smoke test — PR #1 is also addressable as an issue for comments.
    * Asserts array is returned; each comment has id, body, author.
    */
-  it("returns comments array for an issue", async () => {
-    const issues = await callTool("list_issues", {
-      owner: OWNER,
-      repo: REPO,
-      state: "closed",
-    });
-
-    if (issues.issues.length === 0) {
-      console.warn("No closed issues — skipping list_issue_comments smoke test");
-      return;
-    }
-
-    const issueNumber = issues.issues[0].number;
+  it("returns comments array for a known issue/PR number", async () => {
     const result = await callTool("list_issue_comments", {
       owner: OWNER,
       repo: REPO,
-      issueNumber,
+      issueNumber: KNOWN_PR_NUMBER,
     });
 
     expect(Array.isArray(result.comments)).toBe(true);
@@ -448,6 +381,98 @@ describe("list_issue_comments (integration)", () => {
       expect(result.comments[0]).toHaveProperty("author");
     }
   });
+
+  /**
+   * Not found — issue number that does not exist.
+   * Asserts the tool throws (GitHub 404).
+   */
+  it("throws for a non-existent issue number", async () => {
+    await expect(
+      callTool("list_issue_comments", {
+        owner: OWNER,
+        repo: REPO,
+        issueNumber: 999999,
+      })
+    ).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// add_issue_comment
+// ---------------------------------------------------------------------------
+describe("add_issue_comment (integration)", () => {
+  /**
+   * Smoke test — posts a test comment on PR #1 (which accepts issue-style comments).
+   * Asserts the returned comment has id, body, author, html_url, created_at.
+   */
+  it("posts a comment and returns the created comment fields", async () => {
+    const body = `integration test comment ${Date.now()}`;
+    const result = await callTool("add_issue_comment", {
+      owner: OWNER,
+      repo: REPO,
+      issueNumber: KNOWN_PR_NUMBER,
+      body,
+    });
+
+    expect(result.comment).toHaveProperty("id");
+    expect(result.comment).toHaveProperty("body", body);
+    expect(result.comment).toHaveProperty("author");
+    expect(result.comment).toHaveProperty("html_url");
+    expect(result.comment).toHaveProperty("created_at");
+  });
+
+  /**
+   * Missing required field — body is omitted.
+   * Asserts a validation error is returned.
+   */
+  it("rejects request with missing body field", async () => {
+    const json = await callToolRaw("add_issue_comment", {
+      owner: OWNER,
+      repo: REPO,
+      issueNumber: KNOWN_PR_NUMBER,
+    });
+    expect(json.error).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// create_issue
+// ---------------------------------------------------------------------------
+describe("create_issue (integration)", () => {
+  /**
+   * Smoke test — creates a real issue with a timestamped title so it is
+   * uniquely identifiable and won't conflict with other test runs.
+   * Asserts the created issue has number, title, state, html_url, author.
+   */
+  it("creates an issue and returns the mapped issue fields", async () => {
+    const title = `integration test issue ${Date.now()}`;
+    const result = await callTool("create_issue", {
+      owner: OWNER,
+      repo: REPO,
+      title,
+      body: "Created by the integration test suite. Safe to close.",
+      labels: [],
+    });
+
+    expect(result.issue).toHaveProperty("number");
+    expect(result.issue.number).toBeGreaterThan(0);
+    expect(result.issue).toHaveProperty("title", title);
+    expect(result.issue).toHaveProperty("state", "open");
+    expect(result.issue).toHaveProperty("html_url");
+    expect(result.issue).toHaveProperty("author");
+  });
+
+  /**
+   * Missing required field — title is omitted.
+   * Asserts a validation error is returned.
+   */
+  it("rejects request with missing title field", async () => {
+    const json = await callToolRaw("create_issue", {
+      owner: OWNER,
+      repo: REPO,
+    });
+    expect(json.error).toBeDefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -456,10 +481,9 @@ describe("list_issue_comments (integration)", () => {
 describe("get_commit (integration)", () => {
   /**
    * Smoke test — fetches the HEAD commit of main.
-   * Asserts sha, stats, and files are present and non-null for a code commit.
+   * Asserts sha, stats, and files are present.
    */
   it("returns commit detail with stats and files for a real commit SHA", async () => {
-    // Resolve HEAD SHA via get_branch so the test doesn't hardcode a SHA
     const branch = await callTool("get_branch", {
       owner: OWNER,
       repo: REPO,
@@ -498,10 +522,6 @@ describe("get_commit (integration)", () => {
 // list_commits
 // ---------------------------------------------------------------------------
 describe("list_commits (integration)", () => {
-  /**
-   * Smoke test — lists recent commits on main.
-   * Asserts array is non-empty and each commit has sha, message, author, date.
-   */
   it("returns recent commits with expected fields", async () => {
     const result = await callTool("list_commits", {
       owner: OWNER,
@@ -519,10 +539,6 @@ describe("list_commits (integration)", () => {
     expect(commit).toHaveProperty("date");
   });
 
-  /**
-   * Path filter — filtering to a known frequently-changed file.
-   * Asserts commits are returned (this file has multiple commits on main).
-   */
   it("filters commits to those touching a specific path", async () => {
     const result = await callTool("list_commits", {
       owner: OWNER,
@@ -535,10 +551,6 @@ describe("list_commits (integration)", () => {
     expect(result.commits.length).toBeGreaterThan(0);
   });
 
-  /**
-   * perPage respected — requests 3 commits.
-   * Asserts at most 3 are returned.
-   */
   it("respects the perPage limit", async () => {
     const result = await callTool("list_commits", {
       owner: OWNER,
@@ -554,10 +566,6 @@ describe("list_commits (integration)", () => {
 // list_directory
 // ---------------------------------------------------------------------------
 describe("list_directory (integration)", () => {
-  /**
-   * Smoke test — lists the root directory.
-   * Asserts entries contain both files and directories.
-   */
   it("returns entries with file and dir types at the repo root", async () => {
     const result = await callTool("list_directory", {
       owner: OWNER,
@@ -571,10 +579,6 @@ describe("list_directory (integration)", () => {
     expect(types).toContain("dir");
   });
 
-  /**
-   * Nested path — lists src/github.
-   * Asserts only .ts files are returned (no subdirectory at that level).
-   */
   it("returns file entries for a known directory path", async () => {
     const result = await callTool("list_directory", {
       owner: OWNER,
@@ -588,10 +592,6 @@ describe("list_directory (integration)", () => {
     }
   });
 
-  /**
-   * Not found — path that does not exist.
-   * Asserts the tool throws.
-   */
   it("throws for a non-existent path", async () => {
     await expect(
       callTool("list_directory", {
@@ -607,10 +607,6 @@ describe("list_directory (integration)", () => {
 // search_code
 // ---------------------------------------------------------------------------
 describe("search_code (integration)", () => {
-  /**
-   * Smoke test — searches for a symbol known to exist in the codebase.
-   * Asserts total_count > 0 and items have path and matches fields.
-   */
   it("returns results with path and matches for a known query", async () => {
     const result = await callTool("search_code", {
       owner: OWNER,
@@ -625,10 +621,6 @@ describe("search_code (integration)", () => {
     expect(item).toHaveProperty("matches");
   });
 
-  /**
-   * No results — a query guaranteed to match nothing.
-   * Asserts total_count is 0 and items is an empty array.
-   */
   it("returns total_count: 0 and empty items for a query with no matches", async () => {
     const result = await callTool("search_code", {
       owner: OWNER,
@@ -645,10 +637,6 @@ describe("search_code (integration)", () => {
 // search_files
 // ---------------------------------------------------------------------------
 describe("search_files (integration)", () => {
-  /**
-   * Known pattern — searches for ".integration" on the feat/pagination branch
-   * where all integration test files exist. Asserts at least one result is returned.
-   */
   it("returns matching files for a known path pattern", async () => {
     const result = await callTool("search_files", {
       owner: OWNER,
@@ -664,10 +652,6 @@ describe("search_files (integration)", () => {
     }
   });
 
-  /**
-   * No matches — pattern guaranteed not to match any file.
-   * Asserts total_matched is 0 and files is empty.
-   */
   it("returns empty result for a pattern that matches nothing", async () => {
     const result = await callTool("search_files", {
       owner: OWNER,
@@ -679,10 +663,6 @@ describe("search_files (integration)", () => {
     expect(result.results.files).toHaveLength(0);
   });
 
-  /**
-   * ref forwarding — searches on main branch.
-   * Asserts results are returned confirming ref is forwarded correctly.
-   */
   it("returns results when a ref is provided", async () => {
     const result = await callTool("search_files", {
       owner: OWNER,
@@ -694,10 +674,6 @@ describe("search_files (integration)", () => {
     expect(result.results.total_matched).toBeGreaterThan(0);
   });
 
-  /**
-   * Missing required field — pattern is omitted.
-   * Asserts a validation error is returned.
-   */
   it("rejects request with missing pattern field", async () => {
     const json = await callToolRaw("search_files", { owner: OWNER, repo: REPO });
     expect(json.error).toBeDefined();
@@ -705,28 +681,18 @@ describe("search_files (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// update_issue — validation paths only (no mutations on real issues)
+// update_issue — validation paths only
 // ---------------------------------------------------------------------------
 describe("update_issue (integration — validation)", () => {
-  /**
-   * No fields provided — update_issue requires at least one optional field.
-   * Asserts a JSON-RPC error is returned when only required identifiers are sent.
-   */
   it("returns an error when no update fields are provided", async () => {
-    // issueNumber 999999 does not exist, but the empty-payload guard fires first
     const json = await callToolRaw("update_issue", {
       owner: OWNER,
       repo: REPO,
       issueNumber: 999999,
     });
-    // Either a validation error or an AppError (No update fields provided)
     expect(json.error).toBeDefined();
   });
 
-  /**
-   * Invalid state enum — state must be "open" or "closed".
-   * Asserts a validation error is returned.
-   */
   it("rejects an invalid state value with a validation error", async () => {
     const json = await callToolRaw("update_issue", {
       owner: OWNER,
@@ -742,10 +708,6 @@ describe("update_issue (integration — validation)", () => {
 // update_pull_request — validation paths only
 // ---------------------------------------------------------------------------
 describe("update_pull_request (integration — validation)", () => {
-  /**
-   * No fields provided — mirrors update_issue behaviour.
-   * Asserts an error is returned when only pullNumber is sent.
-   */
   it("returns an error when no update fields are provided", async () => {
     const json = await callToolRaw("update_pull_request", {
       owner: OWNER,
@@ -755,9 +717,6 @@ describe("update_pull_request (integration — validation)", () => {
     expect(json.error).toBeDefined();
   });
 
-  /**
-   * Invalid state enum — state must be "open" or "closed".
-   */
   it("rejects an invalid state value with a validation error", async () => {
     const json = await callToolRaw("update_pull_request", {
       owner: OWNER,
@@ -770,32 +729,33 @@ describe("update_pull_request (integration — validation)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// link_issue_to_pull_request — idempotency (read-only assertion)
+// link_issue_to_pull_request
 // ---------------------------------------------------------------------------
 describe("link_issue_to_pull_request (integration)", () => {
   /**
    * Idempotency — calls the tool twice with the same PR/issue pair.
-   * The second call must return linked: false because the first call
-   * already appended the closing keyword.
-   * Uses the current feat/pagination PR and a real open issue if available.
+   * The second call must return linked: false because the closing keyword
+   * was appended by the first call (or was already present).
+   * Uses open PRs and issues if available, otherwise relies on the
+   * known-PR + a real open issue found dynamically.
    */
   it("returns linked: false on a second call for the same PR/issue pair", async () => {
-    const prs = await callTool("list_open_pull_requests", { owner: OWNER, repo: REPO });
     const issues = await callTool("list_issues", { owner: OWNER, repo: REPO, state: "open" });
 
-    if (prs.pull_requests.length === 0 || issues.issues.length === 0) {
-      console.warn("No open PRs or issues — skipping link_issue_to_pull_request idempotency test");
+    if (issues.issues.length === 0) {
+      // No open issues — test the idempotency of a non-existent issue number
+      // which will still exercise the already-linked regex path if we pre-patch.
+      // Skip gracefully — this only happens in an empty repo.
       return;
     }
 
-    const prNumber = prs.pull_requests[0].number;
     const issueNumber = issues.issues[0].number;
 
-    // First call — may be linked or not, we don't assert here
+    // First call
     await callTool("link_issue_to_pull_request", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: prNumber,
+      pullNumber: KNOWN_PR_NUMBER,
       issueNumber,
       keyword: "closes",
     });
@@ -804,7 +764,7 @@ describe("link_issue_to_pull_request (integration)", () => {
     const second = await callTool("link_issue_to_pull_request", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: prNumber,
+      pullNumber: KNOWN_PR_NUMBER,
       issueNumber,
       keyword: "closes",
     });
@@ -814,7 +774,6 @@ describe("link_issue_to_pull_request (integration)", () => {
 
   /**
    * Invalid keyword — keyword must be one of closes/fixes/resolves.
-   * Asserts a validation error is returned.
    */
   it("rejects an invalid keyword with a validation error", async () => {
     const json = await callToolRaw("link_issue_to_pull_request", {
@@ -829,13 +788,9 @@ describe("link_issue_to_pull_request (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// upsert_file — validation paths only (no untracked writes to main)
+// upsert_file — validation paths only
 // ---------------------------------------------------------------------------
 describe("upsert_file (integration — validation)", () => {
-  /**
-   * Missing required field — content is omitted.
-   * Asserts a validation error is returned.
-   */
   it("rejects request with missing content field", async () => {
     const json = await callToolRaw("upsert_file", {
       owner: OWNER,
@@ -843,15 +798,10 @@ describe("upsert_file (integration — validation)", () => {
       path: "test.txt",
       message: "test",
       branch: "main",
-      // content intentionally omitted
     });
     expect(json.error).toBeDefined();
   });
 
-  /**
-   * Missing required field — branch is omitted.
-   * Asserts a validation error is returned.
-   */
   it("rejects request with missing branch field", async () => {
     const json = await callToolRaw("upsert_file", {
       owner: OWNER,
@@ -859,20 +809,15 @@ describe("upsert_file (integration — validation)", () => {
       path: "test.txt",
       content: "hello",
       message: "test",
-      // branch intentionally omitted
     });
     expect(json.error).toBeDefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// create_branch — validation paths only (no branch creation on main)
+// create_branch — validation paths only
 // ---------------------------------------------------------------------------
 describe("create_branch (integration — validation)", () => {
-  /**
-   * Non-existent base branch — GitHub returns 404 when the base doesn't exist.
-   * Asserts the tool throws, confirming the error is propagated correctly.
-   */
   it("throws when the base branch does not exist", async () => {
     await expect(
       callTool("create_branch", {
@@ -884,16 +829,11 @@ describe("create_branch (integration — validation)", () => {
     ).rejects.toThrow();
   });
 
-  /**
-   * Missing required field — newBranch is omitted.
-   * Asserts a validation error is returned.
-   */
   it("rejects request with missing newBranch field", async () => {
     const json = await callToolRaw("create_branch", {
       owner: OWNER,
       repo: REPO,
       baseBranch: "main",
-      // newBranch intentionally omitted
     });
     expect(json.error).toBeDefined();
   });
@@ -903,10 +843,6 @@ describe("create_branch (integration — validation)", () => {
 // Unknown tool
 // ---------------------------------------------------------------------------
 describe("unknown tool (integration)", () => {
-  /**
-   * Asserts the server returns a JSON-RPC error when a tool name that
-   * doesn't exist is called, rather than crashing or returning null.
-   */
   it("returns an error for an unknown tool name", async () => {
     const json = await callToolRaw("tool_that_does_not_exist", {});
     expect(json.error).toBeDefined();
