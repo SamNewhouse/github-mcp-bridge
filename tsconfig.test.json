@@ -1,9 +1,13 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
+    "target": "ES2024",
     "module": "CommonJS",
-    "moduleResolution": "node",
-    "rewriteRelativeImportExtensions": false,
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
     "types": ["node", "jest"]
   },
   "include": ["src/**/*.ts"],
