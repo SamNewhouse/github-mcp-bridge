@@ -93,7 +93,7 @@ export async function handleMcpRequest(
       return sendJson(res, 200, { ok: true });
     }
 
-    if (url.pathname !== "/" && url.pathname !== "/mcp") {
+    if (url.pathname !== "/") {
       log.info("request_rejected", {
         path: url.pathname,
         reason: "not_found",
@@ -101,6 +101,9 @@ export async function handleMcpRequest(
 
       return sendJson(res, 404, { error: "Not found" });
     }
+
+    // Auth applies to all methods on / (GET manifest + POST JSON-RPC)
+    assertAuthorized(req, log);
 
     if (req.method === "GET") {
       log.info("manifest_requested", {
@@ -123,8 +126,6 @@ export async function handleMcpRequest(
 
       return sendJson(res, 405, { error: "Method not allowed" });
     }
-
-    assertAuthorized(req, log);
 
     const rawBody = await readJsonBody(req);
 
