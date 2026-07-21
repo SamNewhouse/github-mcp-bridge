@@ -10,6 +10,7 @@ import {
   sendJsonRpcResult,
 } from "./lib/http";
 import { createRequestLogger, sanitizeHeaders } from "./lib/logging";
+import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
 
@@ -62,6 +63,13 @@ function toMcpToolResult(result: unknown): McpToolResult {
   };
 }
 
+function sendSplashPage(res: http.ServerResponse): void {
+  const html = getSplashHtml(getToolList().length);
+  res.statusCode = 200;
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.end(html);
+}
+
 export async function handleMcpRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -91,6 +99,16 @@ export async function handleMcpRequest(
       });
 
       return sendJson(res, 200, { ok: true });
+    }
+
+    // Public splash page — no auth required for browsers
+    if (url.pathname === "/" && req.method === "GET") {
+      const acceptsHtml = req.headers.accept?.includes("text/html") ?? false;
+
+      if (acceptsHtml) {
+        log.info("splash_page_served", { path: url.pathname });
+        return sendSplashPage(res);
+      }
     }
 
     if (url.pathname !== "/") {
