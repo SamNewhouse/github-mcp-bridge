@@ -1,13 +1,49 @@
 import { getGithubPat } from "../config";
 import { AppError } from "../lib/errors";
-import { logError, logInfo } from "../lib/logging";
+import { logError, logInfo, logWarn } from "../lib/logging";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
+const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_RESPONSE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 type GithubRequestOptions = RequestInit & {
   responseType?: "json" | "text";
 };
+
+function mapGithubStatus(status: number, body: string): AppError {
+  switch (status) {
+    case 401:
+      return new AppError("GitHub authentication failed — check your PAT", 401);
+    case 403: {
+      // Rate limit exhausted vs plain forbidden
+      if (body.includes("rate limit") || body.includes("API rate limit")) {
+        return new AppError("GitHub rate limit exceeded — retry later", 429);
+      }
+      return new AppError(
+        "GitHub request forbidden — insufficient PAT scopes",
+        403,
+      );
+    }
+    case 404:
+      return new AppError("GitHub resource not found", 404);
+    case 409:
+      return new AppError(
+        "GitHub conflict — resource already exists or is out of date",
+        409,
+      );
+    case 422:
+      return new AppError(`GitHub validation error: ${body}`, 422);
+    case 429: {
+      return new AppError("GitHub rate limit exceeded — retry later", 429);
+    }
+    default:
+      return new AppError(
+        `GitHub API error (${status}): ${body || "unknown error"}`,
+        status,
+      );
+  }
+}
 
 export async function githubRequest<T>(
   path: string,
@@ -17,6 +53,8 @@ export async function githubRequest<T>(
   const method = init.method ?? "GET";
   const headers = new Headers(init.headers);
   const responseType = init.responseType ?? "json";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/vnd.github+json");
@@ -48,9 +86,24 @@ export async function githubRequest<T>(
     const response = await fetch(`${GITHUB_API_BASE}${path}`, {
       ...init,
       headers,
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
     const durationMs = Date.now() - startedAt;
+
+    // Warn if rate limit is running low
+    const remaining = response.headers.get("x-ratelimit-remaining");
+    const resetEpoch = response.headers.get("x-ratelimit-reset");
+    if (remaining !== null && Number(remaining) < 100) {
+      const resetAt = resetEpoch
+        ? new Date(Number(resetEpoch) * 1000).toISOString()
+        : null;
+      logWarn("github_rate_limit_low", {
+        remaining: Number(remaining),
+        resetAt,
+      });
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -64,10 +117,19 @@ export async function githubRequest<T>(
         responseBody: text || null,
       });
 
-      throw new AppError(
-        `GitHub API error (${response.status}): ${text || response.statusText}`,
-        response.status,
-      );
+      throw mapGithubStatus(response.status, text);
+    }
+
+    // Guard response size before reading into memory
+    const contentLength = response.headers.get("content-length");
+    if (contentLength && Number(contentLength) > MAX_RESPONSE_SIZE_BYTES) {
+      logError("github_response_too_large", {
+        method,
+        path,
+        contentLength: Number(contentLength),
+        limitBytes: MAX_RESPONSE_SIZE_BYTES,
+      });
+      throw new AppError("GitHub response too large", 413);
     }
 
     logInfo("github_request_succeeded", {
@@ -83,7 +145,16 @@ export async function githubRequest<T>(
 
     return (await response.json()) as T;
   } catch (error) {
+    clearTimeout(timeoutId);
     const durationMs = Date.now() - startedAt;
+
+    if (error instanceof Error && error.name === "AbortError") {
+      logError("github_request_timeout", { method, path, durationMs });
+      throw new AppError(
+        `GitHub API request timed out after ${REQUEST_TIMEOUT_MS}ms`,
+        504,
+      );
+    }
 
     logError("github_request_exception", {
       method,

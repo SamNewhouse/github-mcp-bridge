@@ -35,11 +35,7 @@ type GitHubTreeResult = {
   truncated: boolean;
 };
 
-export async function searchCode(
-  owner: string,
-  repo: string,
-  query: string,
-) {
+export async function searchCode(owner: string, repo: string, query: string) {
   const encodedQuery = encodeURIComponent(`${query} repo:${owner}/${repo}`);
   const result = await githubRequest<GitHubCodeSearchResult>(
     `/search/code?q=${encodedQuery}&per_page=30`,
@@ -78,8 +74,7 @@ export async function searchFiles(
   const lowerPattern = pattern.toLowerCase();
   const matched = result.tree.filter(
     (item) =>
-      item.type === "blob" &&
-      item.path?.toLowerCase().includes(lowerPattern),
+      item.type === "blob" && item.path?.toLowerCase().includes(lowerPattern),
   );
 
   return {

@@ -8,7 +8,7 @@
 
 ## Changes
 
-- 
+-
 
 ## Type of change
 

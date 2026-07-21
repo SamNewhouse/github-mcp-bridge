@@ -4,7 +4,8 @@ import { defineTool } from "./shared";
 
 export const listCommitsTool = defineTool({
   name: "list_commits",
-  description: "List commits for a repository. Optionally filter by branch or file path.",
+  description:
+    "List commits for a repository. Optionally filter by branch or file path.",
   input: listCommitsInputSchema,
   handler: async ({ owner, repo, branch, path, perPage }) => ({
     commits: await listCommits(owner, repo, branch, path, perPage),

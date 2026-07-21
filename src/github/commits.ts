@@ -44,11 +44,7 @@ type GitHubCommitSummary = {
   author: { login: string } | null;
 };
 
-export async function getCommit(
-  owner: string,
-  repo: string,
-  ref: string,
-) {
+export async function getCommit(owner: string, repo: string, ref: string) {
   const commit = await githubRequest<GitHubCommitDetail>(
     `/repos/${owner}/${repo}/commits/${ref}`,
   );
@@ -61,14 +57,15 @@ export async function getCommit(
     author_login: commit.author?.login ?? null,
     date: commit.commit.author.date,
     stats: commit.stats ?? null,
-    files: commit.files?.map((f) => ({
-      path: f.filename,
-      status: f.status,
-      additions: f.additions,
-      deletions: f.deletions,
-      changes: f.changes,
-      patch: f.patch ?? null,
-    })) ?? [],
+    files:
+      commit.files?.map((f) => ({
+        path: f.filename,
+        status: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
+        changes: f.changes,
+        patch: f.patch ?? null,
+      })) ?? [],
   };
 }
 

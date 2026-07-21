@@ -1,8 +1,19 @@
 import { z } from "zod";
 
+// GitHub owner and repo names: alphanumeric, hyphens, underscores, dots.
+// Prevents path traversal and injection via these fields.
+const githubNameSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(
+    /^[a-zA-Z0-9._-]+$/,
+    "must only contain alphanumeric characters, hyphens, underscores, or dots",
+  );
+
 export const repositoryInputSchema = z.object({
-  owner: z.string().min(1, "owner is required"),
-  repo: z.string().min(1, "repo is required"),
+  owner: githubNameSchema,
+  repo: githubNameSchema,
 });
 
 export const createBranchInputSchema = repositoryInputSchema.extend({
