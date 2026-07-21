@@ -14,40 +14,41 @@ export function sendJson(
 }
 
 export function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let totalBytes = 0;
+  const { promise, resolve, reject } = Promise.withResolvers<unknown>();
 
-    req.on("data", (chunk: Buffer | string) => {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      totalBytes += buffer.length;
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
 
-      if (totalBytes > MAX_BODY_SIZE_BYTES) {
-        reject(new AppError("Request body too large", 413));
-        req.destroy();
+  req.on("data", (chunk: Buffer) => {
+    totalBytes += chunk.length;
+
+    if (totalBytes > MAX_BODY_SIZE_BYTES) {
+      reject(new AppError("Request body too large", 413));
+      req.destroy();
+      return;
+    }
+
+    chunks.push(chunk);
+  });
+
+  req.on("end", () => {
+    try {
+      const raw = Buffer.concat(chunks).toString("utf8").trim();
+
+      if (!raw) {
+        resolve({});
         return;
       }
 
-      chunks.push(buffer);
-    });
-
-    req.on("end", () => {
-      try {
-        const raw = Buffer.concat(chunks).toString("utf8").trim();
-
-        if (!raw) {
-          resolve({});
-          return;
-        }
-
-        resolve(JSON.parse(raw) as unknown);
-      } catch {
-        reject(new AppError("Invalid JSON body", 400));
-      }
-    });
-
-    req.on("error", reject);
+      resolve(JSON.parse(raw) as unknown);
+    } catch {
+      reject(new AppError("Invalid JSON body", 400));
+    }
   });
+
+  req.on("error", reject);
+
+  return promise;
 }
 
 export function getRequestUrl(req: http.IncomingMessage): URL | null {
