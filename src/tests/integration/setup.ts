@@ -15,7 +15,7 @@ export default async function globalSetup() {
     throw new Error("[setup] Build failed — cannot start integration server");
   }
 
-  server = spawn("node", ["dist/server.js"], {
+  server = spawn("node", ["dist/src/server.js"], {
     env: {
       ...process.env,
       PORT: port,
