@@ -10,6 +10,7 @@ import {
   listPullRequestComments,
   updatePullRequest,
   createPullRequest,
+  getPullRequestDiff,
 } from "../../src/github/pull-requests";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
@@ -79,6 +80,18 @@ describe("listOpenPullRequests", () => {
 
     const url = (mock as jest.Mock).mock.calls[0][0] as string;
     expect(url).toContain("state=open");
+  });
+
+  /**
+   * per_page=100 — asserts the request fetches up to 100 PRs per page.
+   */
+  it("requests up to 100 PRs per page", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listOpenPullRequests("owner", "repo");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=100");
   });
 
   /**
@@ -154,6 +167,68 @@ describe("getPullRequest", () => {
 });
 
 // ---------------------------------------------------------------------------
+// getPullRequestDiff
+// ---------------------------------------------------------------------------
+describe("getPullRequestDiff", () => {
+  /**
+   * Happy path — returns pullNumber and the raw unified diff string.
+   * Asserts the shape matches { pullNumber, diff } and the diff content
+   * is the string returned by the GitHub diff endpoint.
+   */
+  it("returns pullNumber and diff string", async () => {
+    const rawDiff = "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new";
+    mock.mockResolvedValueOnce(rawDiff);
+
+    const result = await getPullRequestDiff("owner", "repo", 10);
+
+    expect(result.pullNumber).toBe(10);
+    expect(result.diff).toBe(rawDiff);
+  });
+
+  /**
+   * Accept header — the diff endpoint requires a specific Accept header
+   * (application/vnd.github.diff) to return a raw diff instead of JSON.
+   * Asserts the header is passed through to githubRequest.
+   */
+  it("sends the application/vnd.github.diff Accept header", async () => {
+    mock.mockResolvedValueOnce("");
+
+    await getPullRequestDiff("owner", "repo", 10);
+
+    const [, options] = (mock as jest.Mock).mock.calls[0];
+    const headers = new Headers(options.headers);
+    expect(headers.get("Accept")).toBe("application/vnd.github.diff");
+  });
+
+  /**
+   * responseType text — asserts the request is made with responseType: "text"
+   * so githubRequest returns the raw string body rather than trying to
+   * parse it as JSON.
+   */
+  it("requests responseType: text so the raw diff string is returned", async () => {
+    mock.mockResolvedValueOnce("");
+
+    await getPullRequestDiff("owner", "repo", 10);
+
+    const [, options] = (mock as jest.Mock).mock.calls[0];
+    expect(options.responseType).toBe("text");
+  });
+
+  /**
+   * Empty diff — PR with no changes (edge case, e.g. a no-op merge).
+   * Asserts an empty string diff is returned without error.
+   */
+  it("returns an empty diff string when the PR has no changes", async () => {
+    mock.mockResolvedValueOnce("");
+
+    const result = await getPullRequestDiff("owner", "repo", 10);
+
+    expect(result.diff).toBe("");
+    expect(result.pullNumber).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // listPullRequestComments
 // ---------------------------------------------------------------------------
 describe("listPullRequestComments", () => {
@@ -195,6 +270,18 @@ describe("listPullRequestComments", () => {
 
     const url = (mock as jest.Mock).mock.calls[0][0] as string;
     expect(url).toContain("/issues/10/comments");
+  });
+
+  /**
+   * per_page=100 — asserts up to 100 comments are fetched in one call.
+   */
+  it("requests up to 100 comments per page", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listPullRequestComments("owner", "repo", 10);
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=100");
   });
 
   /**
