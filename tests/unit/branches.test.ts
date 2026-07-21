@@ -3,16 +3,59 @@ jest.mock("../../src/github/client", () => ({
 }));
 
 import { githubRequest } from "../../src/github/client";
-import {
-  listBranches,
-  createBranch,
-  getBranch,
-} from "../../src/github/branches";
+import { listBranches, createBranch, getBranch } from "../../src/github/branches";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
 
 beforeEach(() => {
   mock.mockReset();
+});
+
+// ---------------------------------------------------------------------------
+// listBranches
+// ---------------------------------------------------------------------------
+describe("listBranches", () => {
+  /**
+   * Return shape — verifies each branch is mapped to name, sha, and protected.
+   * The sha comes from the nested commit.sha field in the GitHub response.
+   */
+  it("maps name, sha, and protected for each branch", async () => {
+    mock.mockResolvedValueOnce([
+      { name: "main", commit: { sha: "abc123" }, protected: true },
+      { name: "feat/foo", commit: { sha: "def456" }, protected: false },
+    ]);
+
+    const result = await listBranches("owner", "repo");
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ name: "main", sha: "abc123", protected: true });
+    expect(result[1]).toEqual({ name: "feat/foo", sha: "def456", protected: false });
+  });
+
+  /**
+   * URL contains per_page=100 — asserts the request fetches up to 100
+   * branches in one call rather than using a smaller default page size.
+   */
+  it("requests up to 100 branches per page", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listBranches("owner", "repo");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=100");
+  });
+
+  /**
+   * Empty list — repo has no branches (edge case).
+   * Asserts an empty array is returned without error.
+   */
+  it("returns an empty array when there are no branches", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    const result = await listBranches("owner", "repo");
+
+    expect(result).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
