@@ -6,8 +6,6 @@ import { config } from "dotenv";
 // the test process and the spawned server process.
 config();
 
-let server: ChildProcess | null = null;
-
 export default async function globalSetup() {
   const port = process.env.PORT ?? "3000";
 
@@ -20,13 +18,16 @@ export default async function globalSetup() {
     throw new Error("[setup] Build failed — cannot start integration server");
   }
 
-  server = spawn("node", ["dist/server.js"], {
+  const server: ChildProcess = spawn("node", ["dist/server.js"], {
     env: {
       ...process.env,
       PORT: port,
     },
     stdio: "pipe",
   });
+
+  // Store on global so teardown.ts can access it
+  (global as any).__integrationServer = server;
 
   server.stderr?.on("data", (data: Buffer) => {
     process.stderr.write(`[server] ${data.toString()}`);
@@ -51,12 +52,4 @@ export default async function globalSetup() {
 
   server.kill();
   throw new Error("[setup] Server did not become ready within 10s");
-}
-
-export async function globalTeardown() {
-  if (server) {
-    server.kill();
-    server = null;
-    console.log("[teardown] Server stopped");
-  }
 }
