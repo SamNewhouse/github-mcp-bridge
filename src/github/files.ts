@@ -146,6 +146,8 @@ export async function getMultipleFiles(
       "utf8",
     );
 
+    // Always include the first file even if it alone exceeds the budget —
+    // otherwise a single oversized file would loop forever returning nothing.
     if (files.length > 0 && bytesUsed + fileBytes > CONTENT_BYTE_BUDGET) {
       // Adding this file would exceed the budget — stop here and adjust cursor
       stoppedEarlyAt = start + i;
