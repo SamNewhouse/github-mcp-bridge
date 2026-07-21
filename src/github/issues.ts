@@ -23,6 +23,17 @@ type GitHubIssue = {
   pull_request?: unknown;
 };
 
+type GitHubIssueComment = {
+  id: number;
+  body: string;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    login: string;
+  };
+};
+
 type GitHubCreateIssueInput = {
   title: string;
   body?: string;
@@ -204,5 +215,49 @@ export async function linkIssueToPullRequest(
     issueNumber,
     linked: true,
     keyword,
+  };
+}
+
+export async function listIssueComments(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+) {
+  const comments = await githubRequest<GitHubIssueComment[]>(
+    `/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100`,
+  );
+
+  return comments.map((c) => ({
+    id: c.id,
+    body: c.body,
+    html_url: c.html_url,
+    author: c.user.login,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+  }));
+}
+
+export async function addIssueComment(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  body: string,
+) {
+  const comment = await githubRequest<GitHubIssueComment>(
+    `/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+    },
+  );
+
+  return {
+    id: comment.id,
+    body: comment.body,
+    html_url: comment.html_url,
+    author: comment.user.login,
+    created_at: comment.created_at,
+    updated_at: comment.updated_at,
   };
 }

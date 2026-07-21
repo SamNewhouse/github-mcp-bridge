@@ -1,4 +1,5 @@
-export { createBranch, listBranches } from "./branches";
+export { createBranch, getBranch, listBranches } from "./branches";
+export { getCommit, listCommits } from "./commits";
 export {
   getFileContents,
   getMultipleFiles,
@@ -6,9 +7,11 @@ export {
   upsertFile,
 } from "./files";
 export {
+  addIssueComment,
   createIssue,
   getIssue,
   linkIssueToPullRequest,
+  listIssueComments,
   listIssues,
   updateIssue,
 } from "./issues";
@@ -22,3 +25,4 @@ export {
   updatePullRequest,
 } from "./pull-requests";
 export { listRepositories } from "./repositories";
+export { searchCode, searchFiles } from "./search";
