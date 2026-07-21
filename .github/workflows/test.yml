@@ -34,7 +34,7 @@ jobs:
 
       - name: Run integration tests
         env:
-          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+          GITHUB_PAT: ${{ secrets.GH_PAT }}
           CONNECTOR_SECRET: ${{ secrets.CONNECTOR_SECRET }}
           PORT: "3000"
         run: npm run test:integration
