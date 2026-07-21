@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { AppError } from "../../src/lib/errors.js";
+import { AppError } from "../../src/lib/errors";
 
 // Mock the GitHub client before importing the module under test
 jest.mock("../../src/github/client", () => ({
