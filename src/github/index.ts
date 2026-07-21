@@ -6,6 +6,13 @@ export {
   upsertFile,
 } from "./files";
 export {
+  createIssue,
+  getIssue,
+  linkIssueToPullRequest,
+  listIssues,
+  updateIssue,
+} from "./issues";
+export {
   createPullRequest,
   getPullRequest,
   getPullRequestDiff,
