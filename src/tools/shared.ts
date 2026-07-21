@@ -11,7 +11,7 @@ export type McpToolResult = {
   isError?: boolean;
 };
 
-export type ToolResult = unknown | McpToolResult;
+export type ToolResult = unknown;
 
 export type ToolDefinition = {
   name: string;
