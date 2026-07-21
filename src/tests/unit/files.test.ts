@@ -5,8 +5,8 @@ jest.mock("../github/client", () => ({
   githubRequest: jest.fn(),
 }));
 
-import { githubRequest } from "../github/client";
-import { getFileContents, getMultipleFiles } from "../github/files";
+import { githubRequest } from "../../github/client";
+import { getFileContents, getMultipleFiles } from "../../github/files";
 
 const mockGithubRequest = githubRequest as jest.MockedFunction<
   typeof githubRequest
