@@ -20,6 +20,92 @@ function makeTree(paths: string[]) {
   };
 }
 
+function makeCodeSearchResult(items: { path: string; name: string }[]) {
+  return {
+    total_count: items.length,
+    incomplete_results: false,
+    items: items.map((item) => ({
+      name: item.name,
+      path: item.path,
+      sha: "filesha",
+      url: "https://api.github.com/repos/owner/repo/contents/" + item.path,
+      html_url: "https://github.com/owner/repo/blob/main/" + item.path,
+      repository: { full_name: "owner/repo" },
+      text_matches: [{ fragment: "matching fragment", matches: [{ text: "query", indices: [0, 5] }] }],
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// searchCode
+// ---------------------------------------------------------------------------
+describe("searchCode", () => {
+  /**
+   * Happy path — returns mapped items with matches flattened to fragment strings.
+   * Asserts total_count, incomplete_results, and per-item fields are present.
+   */
+  it("returns mapped items with fragments from text_matches", async () => {
+    mock.mockResolvedValueOnce(
+      makeCodeSearchResult([
+        { path: "src/github/files.ts", name: "files.ts" },
+      ])
+    );
+
+    const result = await searchCode("owner", "repo", "githubRequest");
+
+    expect(result.total_count).toBe(1);
+    expect(result.incomplete_results).toBe(false);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      name: "files.ts",
+      path: "src/github/files.ts",
+      repository: "owner/repo",
+    });
+    expect(result.items[0]!.matches).toEqual(["matching fragment"]);
+  });
+
+  /**
+   * No text_matches — GitHub omits text_matches when the Accept header
+   * for text-match+json is not honoured. Asserts matches defaults to []
+   * rather than throwing on undefined.
+   */
+  it("returns matches: [] when text_matches is absent", async () => {
+    const raw = makeCodeSearchResult([{ path: "src/foo.ts", name: "foo.ts" }]);
+    delete (raw.items[0] as any).text_matches;
+    mock.mockResolvedValueOnce(raw);
+
+    const result = await searchCode("owner", "repo", "foo");
+
+    expect(result.items[0]!.matches).toEqual([]);
+  });
+
+  /**
+   * Query scoped to repo — the URL must include the repo:owner/repo scope
+   * so results are confined to the target repository.
+   */
+  it("scopes the search query to the target repository", async () => {
+    mock.mockResolvedValueOnce(makeCodeSearchResult([]));
+
+    await searchCode("owner", "repo", "my query");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(decodeURIComponent(url)).toContain("repo:owner/repo");
+  });
+
+  /**
+   * Empty results — query matches nothing.
+   * Asserts items is an empty array and total_count is 0.
+   */
+  it("returns empty items when no results are found", async () => {
+    mock.mockResolvedValueOnce(makeCodeSearchResult([]));
+
+    const result = await searchCode("owner", "repo", "nonexistent");
+
+    expect(result.items).toEqual([]);
+    expect(result.total_count).toBe(0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // searchFiles
 // ---------------------------------------------------------------------------
