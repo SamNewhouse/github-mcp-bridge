@@ -130,6 +130,19 @@ describe("getCommit", () => {
 // ---------------------------------------------------------------------------
 describe("listCommits", () => {
   /**
+   * Default per_page — calling with no arguments.
+   * Asserts per_page=30 appears in the URL (the documented default).
+   */
+  it("uses per_page=30 as the default", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listCommits("owner", "repo");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=30");
+  });
+
+  /**
    * Branch filter — passing a branch name should set sha= in the URL.
    * Asserts the URL forwarded to githubRequest contains sha=<branch>.
    */
