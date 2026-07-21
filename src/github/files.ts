@@ -126,10 +126,13 @@ export async function getMultipleFiles(
   cursor = 0,
   pageSize = 10,
 ): Promise<PaginatedFilesResult> {
-  const total = paths.length;
+  // Deduplicate to avoid wasted GitHub API calls
+  const uniquePaths = [...new Set(paths)];
+
+  const total = uniquePaths.length;
   const start = Math.min(cursor, total);
   const end = Math.min(start + pageSize, total);
-  const page = paths.slice(start, end);
+  const page = uniquePaths.slice(start, end);
 
   // Fetch files sequentially, accumulate byte count, stop if budget would be exceeded
   const files: Awaited<ReturnType<typeof getFileContents>>[] = [];
