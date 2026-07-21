@@ -1,10 +1,16 @@
-import { spawn, ChildProcess } from "node:child_process";
+import { spawn, spawnSync, ChildProcess } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
 
 let server: ChildProcess | null = null;
 
 export default async function globalSetup() {
   const port = process.env.PORT ?? "3000";
+
+  // Build first so dist/server.js is guaranteed to exist before spawning.
+  const build = spawnSync("npm", ["run", "build"], { stdio: "inherit" });
+  if (build.status !== 0) {
+    throw new Error("[setup] Build failed — cannot start integration server");
+  }
 
   server = spawn("node", ["dist/server.js"], {
     env: {
