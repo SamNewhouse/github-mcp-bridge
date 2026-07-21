@@ -7,7 +7,9 @@ import {
   listOpenPullRequests,
   getPullRequest,
   listPullRequestFiles,
+  listPullRequestComments,
   updatePullRequest,
+  createPullRequest,
 } from "../../src/github/pull-requests";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
@@ -36,6 +38,177 @@ function makePR(overrides: Partial<Record<string, unknown>> = {}) {
     ...overrides,
   };
 }
+
+// ---------------------------------------------------------------------------
+// listOpenPullRequests
+// ---------------------------------------------------------------------------
+describe("listOpenPullRequests", () => {
+  /**
+   * Return shape — verifies the summary fields returned for each PR.
+   * listOpenPullRequests deliberately omits body, mergeable, stats, etc.
+   * to keep the list payload lean.
+   */
+  it("returns summary fields for each open PR", async () => {
+    mock.mockResolvedValueOnce([makePR()]);
+
+    const result = await listOpenPullRequests("owner", "repo");
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      number: 10,
+      title: "Test PR",
+      state: "open",
+      author: "alice",
+      head: "feat/foo",
+      base: "main",
+    });
+    // Summary list must not include heavy fields
+    expect(result[0]).not.toHaveProperty("body");
+    expect(result[0]).not.toHaveProperty("mergeable");
+  });
+
+  /**
+   * URL includes state=open — the endpoint is always called with state=open
+   * baked in. Asserts the URL contains that param so the filter is never
+   * accidentally dropped.
+   */
+  it("calls the GitHub API with state=open", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listOpenPullRequests("owner", "repo");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("state=open");
+  });
+
+  /**
+   * Empty list — repo has no open PRs.
+   * Asserts an empty array is returned without error.
+   */
+  it("returns an empty array when there are no open PRs", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    const result = await listOpenPullRequests("owner", "repo");
+
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getPullRequest
+// ---------------------------------------------------------------------------
+describe("getPullRequest", () => {
+  /**
+   * Happy path — returns full detail including body, mergeable, and stats.
+   * Unlike listOpenPullRequests, getPullRequest uses mapPullRequest which
+   * includes all fields.
+   */
+  it("returns full PR detail including body and stats", async () => {
+    mock.mockResolvedValueOnce(makePR());
+
+    const result = await getPullRequest("owner", "repo", 10);
+
+    expect(result.number).toBe(10);
+    expect(result.body).toBe("PR body");
+    expect(result.additions).toBe(10);
+    expect(result.deletions).toBe(2);
+    expect(result.changed_files).toBe(3);
+    expect(result.headSha).toBe("deadbeef");
+  });
+
+  /**
+   * draft defaults to false — GitHub may omit draft on older PRs.
+   * Asserts the mapped result has draft: false (not undefined).
+   */
+  it("defaults draft to false when GitHub response omits the field", async () => {
+    mock.mockResolvedValueOnce({ ...makePR(), draft: undefined });
+
+    const result = await getPullRequest("owner", "repo", 10);
+
+    expect(result.draft).toBe(false);
+  });
+
+  /**
+   * mergeable null — GitHub returns null while the merge check is pending.
+   * Asserts null is preserved rather than coerced to false or undefined.
+   */
+  it("preserves mergeable: null when GitHub returns null", async () => {
+    mock.mockResolvedValueOnce({ ...makePR(), mergeable: null });
+
+    const result = await getPullRequest("owner", "repo", 10);
+
+    expect(result.mergeable).toBeNull();
+  });
+
+  /**
+   * Null body — PR with no description.
+   * Asserts null body is preserved in the mapped output.
+   */
+  it("preserves null body when PR has no description", async () => {
+    mock.mockResolvedValueOnce(makePR({ body: null }));
+
+    const result = await getPullRequest("owner", "repo", 10);
+
+    expect(result.body).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listPullRequestComments
+// ---------------------------------------------------------------------------
+describe("listPullRequestComments", () => {
+  /**
+   * Return shape — verifies each comment is mapped correctly.
+   * These are conversation (timeline) comments, not inline review comments.
+   */
+  it("maps comment fields correctly", async () => {
+    mock.mockResolvedValueOnce([
+      {
+        id: 55,
+        body: "Looks good!",
+        html_url: "https://github.com/owner/repo/pull/10#issuecomment-55",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        user: { login: "bob" },
+      },
+    ]);
+
+    const result = await listPullRequestComments("owner", "repo", 10);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 55,
+      body: "Looks good!",
+      author: "bob",
+    });
+  });
+
+  /**
+   * Uses issues endpoint — conversation comments are fetched from
+   * /issues/:number/comments, not /pulls/:number/comments (which is
+   * for inline review comments). Asserts the correct URL is called.
+   */
+  it("fetches from the issues comments endpoint", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listPullRequestComments("owner", "repo", 10);
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("/issues/10/comments");
+  });
+
+  /**
+   * Empty list — PR has no comments.
+   * Asserts an empty array is returned without error.
+   */
+  it("returns an empty array when there are no comments", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    const result = await listPullRequestComments("owner", "repo", 10);
+
+    expect(result).toEqual([]);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // updatePullRequest
@@ -94,6 +267,72 @@ describe("updatePullRequest", () => {
     const result = await updatePullRequest("owner", "repo", 10, { title: "T" });
 
     expect(result.mergeable).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createPullRequest
+// ---------------------------------------------------------------------------
+describe("createPullRequest", () => {
+  /**
+   * Happy path — all required fields supplied.
+   * Asserts the POST body contains title, head, base, and that the
+   * returned PR is correctly mapped.
+   */
+  it("sends required fields in the POST body and returns mapped PR", async () => {
+    mock.mockResolvedValueOnce(makePR());
+
+    const result = await createPullRequest("owner", "repo", {
+      title: "My PR",
+      head: "feat/foo",
+      base: "main",
+    });
+
+    const [, options] = (mock as jest.Mock).mock.calls[0];
+    const payload = JSON.parse(options.body);
+    expect(payload.title).toBe("My PR");
+    expect(payload.head).toBe("feat/foo");
+    expect(payload.base).toBe("main");
+    expect(payload.body).toBe(""); // defaults to empty string
+    expect(result.number).toBe(10);
+  });
+
+  /**
+   * draft flag forwarded — when draft: true is supplied the POST body
+   * must include draft: true so GitHub creates a draft PR.
+   */
+  it("includes draft: true in the POST body when supplied", async () => {
+    mock.mockResolvedValueOnce(makePR({ draft: true }));
+
+    await createPullRequest("owner", "repo", {
+      title: "Draft PR",
+      head: "feat/foo",
+      base: "main",
+      draft: true,
+    });
+
+    const [, options] = (mock as jest.Mock).mock.calls[0];
+    const payload = JSON.parse(options.body);
+    expect(payload.draft).toBe(true);
+  });
+
+  /**
+   * draft omitted — when draft is not supplied the POST body must not
+   * include a draft key at all (not default to false), to avoid
+   * inadvertently converting a non-draft PR to draft=false.
+   */
+  it("omits draft from the POST body when not supplied", async () => {
+    mock.mockResolvedValueOnce(makePR());
+
+    await createPullRequest("owner", "repo", {
+      title: "PR",
+      head: "feat/foo",
+      base: "main",
+    });
+
+    const [, options] = (mock as jest.Mock).mock.calls[0];
+    const payload = JSON.parse(options.body);
+    expect(payload).not.toHaveProperty("draft");
   });
 });
 
