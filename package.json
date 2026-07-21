@@ -1,7 +1,7 @@
 {
   "name": "github-mcp-bridge",
   "version": "1.0.0",
-  "description": "A small TypeScript GitHub MCP bridge.",
+  "description": "A lightweight TypeScript MCP server that exposes GitHub operations as JSON-RPC tools over HTTP. Drop-in connector for any MCP-compatible AI client.",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -10,26 +10,47 @@
     "start": "node dist/server.js",
     "test": "tsc --noEmit"
   },
-  "keywords": [
-    "github",
-    "mcp",
-    "typescript",
-    "bridge"
-  ],
-  "author": "",
-  "license": "MIT",
-  "private": false,
   "dependencies": {
-    "dotenv": "^17.4.2",
-    "zod": "^4.4.3"
+    "dotenv": "17.4.2",
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
-    "prettier": "^3.9.5",
-    "tsx": "^4.23.1",
-    "typescript": "^5.9.2"
+    "@types/node": "24.13.3",
+    "prettier": "3.9.6",
+    "tsx": "4.23.1",
+    "typescript": "5.9.2"
   },
   "engines": {
     "node": ">=24"
-  }
+  },
+  "license": "MIT",
+  "private": false,
+  "author": {
+    "name": "Sam Newhouse",
+    "url": "https://github.com/SamNewhouse"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SamNewhouse/github-mcp-bridge.git"
+  },
+  "homepage": "https://github.com/SamNewhouse/github-mcp-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/SamNewhouse/github-mcp-bridge/issues"
+  },
+  "keywords": [
+    "github",
+    "mcp",
+    "model-context-protocol",
+    "typescript",
+    "bridge",
+    "ai",
+    "llm",
+    "tool-use",
+    "json-rpc",
+    "github-api",
+    "vercel",
+    "serverless",
+    "automation",
+    "developer-tools"
+  ]
 }
