@@ -1,40 +1,15 @@
-name: Test
+# This workflow has been superseded by ci.yml which runs the same
+# jobs (typecheck, unit, integration) as parallel jobs on both
+# pull_request and push to main. This file is kept to avoid a
+# breaking rename but will never trigger automatically.
+
+name: Test (disabled)
 
 on:
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
-  test:
-    name: Unit & Integration Tests
+  noop:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Build server
-        run: npm run build
-
-      - name: Run unit tests
-        run: npm run test:unit
-
-      - name: Run integration tests
-        env:
-          GITHUB_PAT: ${{ secrets.GH_PAT }}
-          CONNECTOR_SECRET: ${{ secrets.CONNECTOR_SECRET }}
-          PORT: "3000"
-        run: npm run test:integration
+      - run: echo "This workflow is disabled. See ci.yml."
