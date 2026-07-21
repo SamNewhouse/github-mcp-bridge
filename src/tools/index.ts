@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { addIssueCommentTool } from "./add-issue-comment";
 import { createBranchTool } from "./create-branch";
@@ -62,11 +61,6 @@ export const toolDefinitions = Object.fromEntries(
 
 export type ToolName = keyof typeof toolDefinitions;
 
-export const toolRequestSchema = z.object({
-  tool: z.string(),
-  input: z.unknown().optional(),
-});
-
 export function getToolList() {
   return tools.map((tool) => ({
     name: tool.name,
@@ -76,11 +70,10 @@ export function getToolList() {
 }
 
 export async function executeTool(name: string, input: unknown) {
-  const tool = toolDefinitions[name as ToolName];
-
-  if (!tool) {
+  if (!Object.hasOwn(toolDefinitions, name)) {
     throw new AppError("Unknown or missing tool", 400);
   }
 
+  const tool = toolDefinitions[name as ToolName];
   return tool.run(input);
 }
