@@ -87,6 +87,19 @@ describe("listIssues", () => {
   });
 
   /**
+   * per_page=100 — asserts the request fetches up to 100 issues per page
+   * so a single call returns all issues without additional pagination.
+   */
+  it("requests up to 100 issues per page", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listIssues("owner", "repo");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=100");
+  });
+
+  /**
    * Return shape — verifies the mapped output fields are correct.
    * Asserts labels and assignees are flattened to string arrays
    * and all expected top-level keys are present.
@@ -329,6 +342,18 @@ describe("listIssueComments", () => {
   });
 
   /**
+   * per_page=100 — asserts the request fetches up to 100 comments per page.
+   */
+  it("requests up to 100 comments per page", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listIssueComments("owner", "repo", 1);
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=100");
+  });
+
+  /**
    * Empty list — issue exists but has no comments.
    * Asserts an empty array is returned without error.
    */
@@ -406,5 +431,17 @@ describe("createIssue", () => {
     const payload = JSON.parse(options.body);
     expect(payload.labels).toEqual(["bug"]);
     expect(payload.assignees).toEqual(["alice"]);
+  });
+
+  /**
+   * Return shape includes html_url — asserts createIssue maps html_url
+   * from the GitHub response so callers can link directly to the new issue.
+   */
+  it("returns html_url in the mapped response", async () => {
+    mock.mockResolvedValueOnce(makeIssue());
+
+    const result = await createIssue("owner", "repo", { title: "Bug" });
+
+    expect(result).toHaveProperty("html_url", "https://github.com/owner/repo/issues/1");
   });
 });
