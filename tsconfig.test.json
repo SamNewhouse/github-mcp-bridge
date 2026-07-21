@@ -4,6 +4,7 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "outDir": "dist-test",
+    "rewriteRelativeImportExtensions": false,
     "types": ["node", "jest"]
   },
   "include": ["src/**/*.ts"]
