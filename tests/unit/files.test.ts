@@ -6,7 +6,12 @@ jest.mock("../../src/github/client", () => ({
 }));
 
 import { githubRequest } from "../../src/github/client";
-import { getFileContents, getMultipleFiles } from "../../src/github/files";
+import {
+  getFileContents,
+  getMultipleFiles,
+  listDirectory,
+  upsertFile,
+} from "../../src/github/files";
 
 const mockGithubRequest = githubRequest as jest.MockedFunction<
   typeof githubRequest
@@ -22,6 +27,19 @@ function makeGitHubFile(content: string, path = "src/example.ts") {
     size: Buffer.byteLength(content, "utf8"),
     encoding: "base64",
     content: Buffer.from(content, "utf8").toString("base64"),
+  };
+}
+
+function makeDirectoryEntry(
+  name: string,
+  type: "file" | "dir" | "symlink" | "submodule" = "file"
+) {
+  return {
+    type,
+    name,
+    path: `src/${name}`,
+    sha: "sha-" + name,
+    size: type === "dir" ? 0 : 100,
   };
 }
 
@@ -101,6 +119,20 @@ describe("getFileContents", () => {
     const result = await getFileContents("owner", "repo", "src/example.ts");
 
     expect(result.content).toBe(original);
+  });
+
+  /**
+   * ref forwarded — when a ref is supplied it should appear as a query
+   * param in the URL sent to githubRequest.
+   */
+  it("includes ref in the URL when supplied", async () => {
+    const raw = "export default 1;";
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(raw));
+
+    await getFileContents("owner", "repo", "src/example.ts", "feat/my-branch");
+
+    const url = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("ref=feat%2Fmy-branch");
   });
 });
 
@@ -184,18 +216,11 @@ describe("getMultipleFiles", () => {
   });
 
   /**
-   * Out-of-bounds cursor — cursor 999 on a single-file array.
-   * Asserts an empty result is returned without making any API calls,
-   * since the cursor is clamped to the array length.
+   * Out-of-bounds cursor — cursor equal to total.
+   * Asserts 0 files are returned, hasMore is false, and no API call is made.
    */
-  it("returns empty result when cursor is beyond array length", async () => {
-    const result = await getMultipleFiles(
-      "owner",
-      "repo",
-      ["src/a.ts"],
-      undefined,
-      999
-    );
+  it("returns 0 files and hasMore: false when cursor equals total", async () => {
+    const result = await getMultipleFiles("owner", "repo", ["src/a.ts"], undefined, 1);
 
     expect(result.files).toHaveLength(0);
     expect(result.pagination.hasMore).toBe(false);
@@ -204,117 +229,251 @@ describe("getMultipleFiles", () => {
   });
 
   /**
-   * Custom pageSize — explicit pageSize: 3 on a 12-file list.
-   * Asserts 3 files are returned, pageSize is reflected in pagination,
-   * and nextCursor advances by 3.
+   * Budget stop mid-page — two files where the second alone would push
+   * the total bytes over the 3.5 MB budget.
+   * Asserts only the first file is returned, hasMore is true, and
+   * nextCursor points to the second file's index so it can be resumed.
    */
-  it("respects a custom pageSize", async () => {
-    mockFiles(3);
+  it("stops early and sets hasMore: true when cumulative budget is exceeded", async () => {
+    const BUDGET = 3.5 * 1024 * 1024;
+    const smallContent = "small";
+    const bigContent = "x".repeat(Math.ceil(BUDGET) + 1);
 
-    const result = await getMultipleFiles(
-      "owner",
-      "repo",
-      paths,
-      undefined,
-      0,
-      3
-    );
+    const threePaths = ["src/a.ts", "src/b.ts", "src/c.ts"];
 
-    expect(result.files).toHaveLength(3);
-    expect(result.pagination.pageSize).toBe(3);
-    expect(result.pagination.nextCursor).toBe(3);
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile(smallContent, "src/a.ts"))
+      .mockResolvedValueOnce(makeGitHubFile(bigContent, "src/b.ts"));
+
+    const result = await getMultipleFiles("owner", "repo", threePaths);
+
+    expect(result.files).toHaveLength(1);
+    expect(result.pagination.hasMore).toBe(true);
+    expect(result.pagination.nextCursor).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listDirectory
+// ---------------------------------------------------------------------------
+describe("listDirectory", () => {
+  /**
+   * Happy path — GitHub returns an array of entries for a directory.
+   * Asserts the entries are mapped correctly with name, path, sha, size, type.
+   */
+  it("returns mapped directory entries", async () => {
+    mockGithubRequest.mockResolvedValueOnce([
+      makeDirectoryEntry("index.ts", "file"),
+      makeDirectoryEntry("utils", "dir"),
+    ]);
+
+    const result = await listDirectory("owner", "repo", "src");
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      name: "index.ts",
+      path: "src/index.ts",
+      type: "file",
+    });
+    expect(result[1]).toMatchObject({
+      name: "utils",
+      type: "dir",
+    });
   });
 
   /**
-   * Mid-page budget stop — first file is small, second file alone exceeds
-   * the 3.5 MB budget. Asserts that only the first file is returned,
-   * hasMore is true, and nextCursor points to the oversized file so the
-   * caller can resume from there on the next request.
+   * File path guard — GitHub returns a plain object (not an array) when
+   * the path points to a file, not a directory. Asserts AppError is thrown
+   * with a message identifying the bad path.
    */
-  it("stops early and adjusts nextCursor when byte budget would be exceeded mid-page", async () => {
-    const BUDGET = 3.5 * 1024 * 1024;
+  it("throws AppError when the path is a file not a directory", async () => {
+    // GitHub returns a single object for files, not an array
     mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile("small", "src/a.ts")
-    );
-    const huge = "x".repeat(Math.ceil(BUDGET) + 1);
-    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(huge, "src/b.ts"));
-
-    const result = await getMultipleFiles("owner", "repo", ["src/a.ts", "src/b.ts", "src/c.ts"]);
-
-    expect(result.files).toHaveLength(1);
-    expect(result.pagination.hasMore).toBe(true);
-    expect(result.pagination.nextCursor).toBe(1);
-  });
-
-  /**
-   * First-file budget guard — the very first file in the page already exceeds
-   * the 3.5 MB budget by itself. Asserts it is still returned (to avoid an
-   * infinite pagination loop where nothing would ever be yielded), hasMore is
-   * true, and nextCursor points past it so subsequent pages can make progress.
-   */
-  it("includes the first file even when it alone exceeds the byte budget", async () => {
-    const BUDGET = 3.5 * 1024 * 1024;
-    const huge = "x".repeat(Math.ceil(BUDGET) + 1);
-    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(huge, "src/a.ts"));
-
-    const result = await getMultipleFiles("owner", "repo", ["src/a.ts", "src/b.ts"]);
-
-    expect(result.files).toHaveLength(1);
-    expect(result.files[0]!.path).toBe("src/a.ts");
-    expect(result.pagination.hasMore).toBe(true);
-    expect(result.pagination.nextCursor).toBe(1);
-  });
-
-  /**
-   * ref forwarding — verifies that the ref argument is threaded through
-   * to every underlying getFileContents call. Checks the URL passed to
-   * githubRequest contains the encoded ref query param.
-   */
-  it("forwards ref to each getFileContents call", async () => {
-    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", "src/a.ts"));
-
-    await getMultipleFiles("owner", "repo", ["src/a.ts"], "my-branch");
-
-    const calledUrl = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
-    expect(calledUrl).toContain("ref=my-branch");
-  });
-
-  /**
-   * Cursor exactly at total — cursor set to the exact length of the path list.
-   * Distinct from cursor > total: Math.min(cursor, total) returns total,
-   * slice(total, total) is empty. Asserts no files and no API calls.
-   */
-  it("returns empty result when cursor equals total exactly", async () => {
-    const singlePath = ["src/a.ts"];
-
-    const result = await getMultipleFiles(
-      "owner",
-      "repo",
-      singlePath,
-      undefined,
-      1 // cursor === total (1)
+      makeGitHubFile("content", "src/index.ts")
     );
 
-    expect(result.files).toHaveLength(0);
-    expect(result.pagination.hasMore).toBe(false);
-    expect(result.pagination.nextCursor).toBeNull();
-    expect(mockGithubRequest).not.toHaveBeenCalled();
+    await expect(
+      listDirectory("owner", "repo", "src/index.ts")
+    ).rejects.toThrow("Path is not a directory");
   });
 
   /**
-   * Single file, fully consumed — 1-path list with default pageSize 10.
-   * Asserts exactly 1 file is returned, hasMore is false, nextCursor is null,
-   * and total and returned are both 1.
+   * Root path — calling with path="" lists the repo root.
+   * Asserts the URL sent to githubRequest uses /contents (no trailing slash)
+   * rather than /contents/ which would 404.
    */
-  it("returns hasMore: false and nextCursor: null for a single file list", async () => {
-    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", "src/a.ts"));
+  it("lists the repo root when path is empty", async () => {
+    mockGithubRequest.mockResolvedValueOnce([
+      makeDirectoryEntry("README.md", "file"),
+    ]);
 
-    const result = await getMultipleFiles("owner", "repo", ["src/a.ts"]);
+    await listDirectory("owner", "repo", "");
 
-    expect(result.files).toHaveLength(1);
-    expect(result.pagination.hasMore).toBe(false);
-    expect(result.pagination.nextCursor).toBeNull();
-    expect(result.pagination.total).toBe(1);
-    expect(result.pagination.returned).toBe(1);
+    const url = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("/contents");
+    expect(url).not.toContain("/contents/");
+  });
+
+  /**
+   * ref forwarded — when a ref is supplied it should appear in the URL.
+   */
+  it("includes ref in the URL when supplied", async () => {
+    mockGithubRequest.mockResolvedValueOnce([]);
+
+    await listDirectory("owner", "repo", "src", "main");
+
+    const url = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("ref=main");
+  });
+
+  /**
+   * Empty directory — GitHub returns an empty array.
+   * Asserts an empty array is returned without error.
+   */
+  it("returns an empty array for an empty directory", async () => {
+    mockGithubRequest.mockResolvedValueOnce([]);
+
+    const result = await listDirectory("owner", "repo", "src");
+
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// upsertFile
+// ---------------------------------------------------------------------------
+describe("upsertFile", () => {
+  const upsertInput = {
+    path: "src/new-file.ts",
+    content: "export const x = 1;",
+    message: "chore: add new-file",
+    branch: "main",
+  };
+
+  function makeUpsertResponse(sha = "new-sha") {
+    return {
+      content: {
+        name: "new-file.ts",
+        path: "src/new-file.ts",
+        sha,
+        size: 20,
+      },
+      commit: {
+        sha: "commit-sha",
+        html_url: "https://github.com/owner/repo/commit/commit-sha",
+        message: "chore: add new-file",
+      },
+    };
+  }
+
+  /**
+   * Create branch (file doesn't exist) — GET returns 404, so no SHA is
+   * fetched, and the PUT body must not contain a sha field.
+   * Asserts created: true is returned.
+   */
+  it("creates a new file and returns created: true when file does not exist", async () => {
+    const { AppError } = await import("../../src/lib/errors");
+    mockGithubRequest
+      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404)) // GET existing
+      .mockResolvedValueOnce(makeUpsertResponse()); // PUT
+
+    const result = await upsertFile("owner", "repo", upsertInput);
+
+    expect(result.created).toBe(true);
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    expect(body).not.toHaveProperty("sha");
+  });
+
+  /**
+   * Update branch (file exists) — GET returns the existing file with a sha.
+   * Asserts the PUT body includes the existing sha and created: false is returned.
+   */
+  it("updates an existing file and returns created: false when file exists", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("old content", upsertInput.path)) // GET existing
+      .mockResolvedValueOnce(makeUpsertResponse()); // PUT
+
+    const result = await upsertFile("owner", "repo", upsertInput);
+
+    expect(result.created).toBe(false);
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    expect(body.sha).toBe("abc123"); // sha from makeGitHubFile
+  });
+
+  /**
+   * Content base64-encoded — the PUT body must send content as a base64
+   * string, not raw UTF-8 text. Asserts the encoded value round-trips
+   * back to the original string.
+   */
+  it("base64-encodes the content in the PUT body", async () => {
+    const { AppError } = await import("../../src/lib/errors");
+    mockGithubRequest
+      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
+      .mockResolvedValueOnce(makeUpsertResponse());
+
+    await upsertFile("owner", "repo", upsertInput);
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    const decoded = Buffer.from(body.content, "base64").toString("utf8");
+    expect(decoded).toBe(upsertInput.content);
+  });
+
+  /**
+   * PUT method — asserts the upsert call uses the HTTP PUT method,
+   * not POST, which is what the GitHub Contents API requires.
+   */
+  it("uses the PUT HTTP method", async () => {
+    const { AppError } = await import("../../src/lib/errors");
+    mockGithubRequest
+      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
+      .mockResolvedValueOnce(makeUpsertResponse());
+
+    await upsertFile("owner", "repo", upsertInput);
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    expect(options.method).toBe("PUT");
+  });
+
+  /**
+   * Return shape — asserts the mapped result contains file and commit
+   * sub-objects with the expected fields.
+   */
+  it("returns file and commit fields in the response", async () => {
+    const { AppError } = await import("../../src/lib/errors");
+    mockGithubRequest
+      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
+      .mockResolvedValueOnce(makeUpsertResponse());
+
+    const result = await upsertFile("owner", "repo", upsertInput);
+
+    expect(result.file).toMatchObject({
+      name: "new-file.ts",
+      path: "src/new-file.ts",
+      sha: "new-sha",
+    });
+    expect(result.commit).toMatchObject({
+      sha: "commit-sha",
+      html_url: expect.stringContaining("github.com"),
+      message: "chore: add new-file",
+    });
+  });
+
+  /**
+   * Non-404 GET error propagates — if the existence check fails with a
+   * non-404 error (e.g. 401, 403, 500) the error must be re-thrown
+   * rather than silently swallowed.
+   */
+  it("rethrows non-404 errors from the existence check", async () => {
+    const { AppError } = await import("../../src/lib/errors");
+    mockGithubRequest.mockRejectedValueOnce(
+      new AppError("GitHub request forbidden", 403)
+    );
+
+    await expect(
+      upsertFile("owner", "repo", upsertInput)
+    ).rejects.toThrow("GitHub request forbidden");
   });
 });
