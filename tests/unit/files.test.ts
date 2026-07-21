@@ -33,6 +33,11 @@ beforeEach(() => {
 // getFileContents
 // ---------------------------------------------------------------------------
 describe("getFileContents", () => {
+  /**
+   * Happy path — a normal file well within the 3.5 MB budget.
+   * Asserts that content is correctly decoded from base64 and that
+   * truncated is false with no fullSizeBytes field present.
+   */
   it("returns decoded content and truncated: false for a normal file", async () => {
     const raw = "export const hello = 'world';";
     mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(raw));
@@ -44,6 +49,12 @@ describe("getFileContents", () => {
     expect(result).not.toHaveProperty("fullSizeBytes");
   });
 
+  /**
+   * Budget enforcement — file content exceeds the 3.5 MB Vercel payload cap.
+   * Asserts that content is sliced to the budget, truncated is true,
+   * and fullSizeBytes / truncatedAt are present so the caller knows
+   * how much was dropped.
+   */
   it("truncates content and sets truncated: true when file exceeds 3.5 MB", async () => {
     const BUDGET = 3.5 * 1024 * 1024;
     const oversized = "x".repeat(Math.ceil(BUDGET) + 1000);
@@ -58,6 +69,11 @@ describe("getFileContents", () => {
     expect((result as any).truncatedAt).toBe(BUDGET);
   });
 
+  /**
+   * Type guard — GitHub returns a directory entry instead of a file
+   * when the path points to a folder. Asserts that an AppError is thrown
+   * with a message identifying the bad path.
+   */
   it("throws when the path is a directory", async () => {
     mockGithubRequest.mockResolvedValueOnce({
       type: "dir",
@@ -74,6 +90,10 @@ describe("getFileContents", () => {
     ).rejects.toThrow("Path is not a file: src");
   });
 
+  /**
+   * Encoding correctness — verifies the base64 decode + newline normalisation
+   * round-trips cleanly for content containing special characters and newlines.
+   */
   it("correctly decodes base64 encoded content", async () => {
     const original = "const x = 42;\nconst y = 'hello';";
     mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(original));
@@ -111,6 +131,11 @@ describe("getMultipleFiles", () => {
     }
   }
 
+  /**
+   * Default pagination — 12 paths with the default pageSize of 10.
+   * Asserts the first page returns exactly 10 files, hasMore is true,
+   * nextCursor points to index 10, and total/returned/cursor are correct.
+   */
   it("returns first 10 files with hasMore: true for a 12-file list", async () => {
     mockFiles(10);
 
@@ -124,6 +149,11 @@ describe("getMultipleFiles", () => {
     expect(result.pagination.cursor).toBe(0);
   });
 
+  /**
+   * Second page — same 12-path list resumed at cursor 10.
+   * Asserts the remaining 2 files are returned, hasMore is false,
+   * and nextCursor is null indicating no further pages.
+   */
   it("returns remaining 2 files when cursor: 10 on a 12-file list", async () => {
     mockFiles(2);
 
@@ -135,6 +165,11 @@ describe("getMultipleFiles", () => {
     expect(result.pagination.cursor).toBe(10);
   });
 
+  /**
+   * Deduplication — 4 paths where each appears twice.
+   * Asserts only 2 GitHub API calls are made and total reflects
+   * the deduplicated count, not the original input length.
+   */
   it("deduplicates paths before fetching", async () => {
     const duped = ["src/a.ts", "src/a.ts", "src/b.ts", "src/b.ts"];
     mockGithubRequest
@@ -148,6 +183,11 @@ describe("getMultipleFiles", () => {
     expect(mockGithubRequest).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * Out-of-bounds cursor — cursor 999 on a single-file array.
+   * Asserts an empty result is returned without making any API calls,
+   * since the cursor is clamped to the array length.
+   */
   it("returns empty result when cursor is beyond array length", async () => {
     const result = await getMultipleFiles(
       "owner",
@@ -163,6 +203,11 @@ describe("getMultipleFiles", () => {
     expect(mockGithubRequest).not.toHaveBeenCalled();
   });
 
+  /**
+   * Custom pageSize — explicit pageSize: 3 on a 12-file list.
+   * Asserts 3 files are returned, pageSize is reflected in pagination,
+   * and nextCursor advances by 3.
+   */
   it("respects a custom pageSize", async () => {
     mockFiles(3);
 
@@ -180,6 +225,12 @@ describe("getMultipleFiles", () => {
     expect(result.pagination.nextCursor).toBe(3);
   });
 
+  /**
+   * Mid-page budget stop — first file is small, second file alone exceeds
+   * the 3.5 MB budget. Asserts that only the first file is returned,
+   * hasMore is true, and nextCursor points to the oversized file so the
+   * caller can resume from there on the next request.
+   */
   it("stops early and adjusts nextCursor when byte budget would be exceeded mid-page", async () => {
     const BUDGET = 3.5 * 1024 * 1024;
     mockGithubRequest.mockResolvedValueOnce(
