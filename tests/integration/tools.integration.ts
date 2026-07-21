@@ -155,6 +155,7 @@ describe("list_open_pull_requests (integration)", () => {
   /**
    * Smoke test — asserts the response is an array (possibly empty).
    * Each PR, if present, must have the expected shape.
+   * Note: the tool returns pull_requests (snake_case), not pullRequests.
    */
   it("returns an array of open pull requests with expected fields", async () => {
     const result = await callTool("list_open_pull_requests", {
@@ -162,9 +163,9 @@ describe("list_open_pull_requests (integration)", () => {
       repo: REPO,
     });
 
-    expect(Array.isArray(result.pullRequests)).toBe(true);
-    if (result.pullRequests.length > 0) {
-      const pr = result.pullRequests[0];
+    expect(Array.isArray(result.pull_requests)).toBe(true);
+    if (result.pull_requests.length > 0) {
+      const pr = result.pull_requests[0];
       expect(pr).toHaveProperty("number");
       expect(pr).toHaveProperty("title");
       expect(pr).toHaveProperty("head");
@@ -189,12 +190,12 @@ describe("get_pull_request (integration)", () => {
       repo: REPO,
     });
 
-    if (list.pullRequests.length === 0) {
+    if (list.pull_requests.length === 0) {
       console.warn("No open PRs — skipping get_pull_request smoke test");
       return;
     }
 
-    const prNumber = list.pullRequests[0].number;
+    const prNumber = list.pull_requests[0].number;
     const result = await callTool("get_pull_request", {
       owner: OWNER,
       repo: REPO,
@@ -237,12 +238,12 @@ describe("get_pull_request_diff (integration)", () => {
       repo: REPO,
     });
 
-    if (list.pullRequests.length === 0) {
+    if (list.pull_requests.length === 0) {
       console.warn("No open PRs — skipping get_pull_request_diff smoke test");
       return;
     }
 
-    const prNumber = list.pullRequests[0].number;
+    const prNumber = list.pull_requests[0].number;
     const result = await callTool("get_pull_request_diff", {
       owner: OWNER,
       repo: REPO,
@@ -269,12 +270,12 @@ describe("list_pull_request_files (integration)", () => {
       repo: REPO,
     });
 
-    if (list.pullRequests.length === 0) {
+    if (list.pull_requests.length === 0) {
       console.warn("No open PRs — skipping list_pull_request_files smoke test");
       return;
     }
 
-    const prNumber = list.pullRequests[0].number;
+    const prNumber = list.pull_requests[0].number;
     const result = await callTool("list_pull_request_files", {
       owner: OWNER,
       repo: REPO,
@@ -301,12 +302,12 @@ describe("list_pull_request_comments (integration)", () => {
       repo: REPO,
     });
 
-    if (list.pullRequests.length === 0) {
+    if (list.pull_requests.length === 0) {
       console.warn("No open PRs — skipping list_pull_request_comments smoke test");
       return;
     }
 
-    const prNumber = list.pullRequests[0].number;
+    const prNumber = list.pull_requests[0].number;
     const result = await callTool("list_pull_request_comments", {
       owner: OWNER,
       repo: REPO,
@@ -391,12 +392,12 @@ describe("get_issue (integration)", () => {
       repo: REPO,
     });
 
-    if (list.pullRequests.length === 0) {
+    if (list.pull_requests.length === 0) {
       console.warn("No open PRs — skipping get_issue PR-guard integration test");
       return;
     }
 
-    const prNumber = list.pullRequests[0].number;
+    const prNumber = list.pull_requests[0].number;
     await expect(
       callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: prNumber })
     ).rejects.toThrow();
@@ -645,14 +646,15 @@ describe("search_code (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("search_files (integration)", () => {
   /**
-   * Known pattern — searches for ".integration" which matches all
-   * integration test files. Asserts at least one result is returned.
+   * Known pattern — searches for ".integration" on the feat/pagination branch
+   * where all integration test files exist. Asserts at least one result is returned.
    */
   it("returns matching files for a known path pattern", async () => {
     const result = await callTool("search_files", {
       owner: OWNER,
       repo: REPO,
       pattern: ".integration",
+      ref: "feat/pagination",
     });
 
     expect(result.results.total_matched).toBeGreaterThan(0);
@@ -781,12 +783,12 @@ describe("link_issue_to_pull_request (integration)", () => {
     const prs = await callTool("list_open_pull_requests", { owner: OWNER, repo: REPO });
     const issues = await callTool("list_issues", { owner: OWNER, repo: REPO, state: "open" });
 
-    if (prs.pullRequests.length === 0 || issues.issues.length === 0) {
+    if (prs.pull_requests.length === 0 || issues.issues.length === 0) {
       console.warn("No open PRs or issues — skipping link_issue_to_pull_request idempotency test");
       return;
     }
 
-    const prNumber = prs.pullRequests[0].number;
+    const prNumber = prs.pull_requests[0].number;
     const issueNumber = issues.issues[0].number;
 
     // First call — may be linked or not, we don't assert here
