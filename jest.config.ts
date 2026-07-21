@@ -21,7 +21,8 @@ const config: Config = {
       roots: ["<rootDir>/tests/integration"],
       testMatch: ["**/*.integration.ts"],
       globalSetup: "<rootDir>/tests/integration/setup.ts",
-      testTimeout: 50000,
+      globalTeardown: "<rootDir>/tests/integration/teardown.ts",
+      testTimeout: 30000,
       transform: {
         "^.+\.tsx?$": [
           "ts-jest",
