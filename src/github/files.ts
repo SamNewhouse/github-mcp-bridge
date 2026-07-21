@@ -124,14 +124,14 @@ export async function getMultipleFiles(
   paths: string[],
   ref?: string,
   cursor = 0,
-  pageSize = 6,
+  pageSize = 10,
 ): Promise<PaginatedFilesResult> {
   const total = paths.length;
   const start = Math.min(cursor, total);
   const end = Math.min(start + pageSize, total);
   const page = paths.slice(start, end);
 
-  // Fetch the page concurrently, accumulate until byte budget is hit
+  // Fetch files sequentially, accumulate byte count, stop if budget would be exceeded
   const files: Awaited<ReturnType<typeof getFileContents>>[] = [];
   let bytesUsed = 0;
   let stoppedEarlyAt: number | null = null;
