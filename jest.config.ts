@@ -19,6 +19,7 @@ const config: Config = {
       displayName: "integration",
       testEnvironment: "node",
       roots: ["<rootDir>/tests/integration"],
+      testMatch: ["**/*.integration.ts"],
       globalSetup: "<rootDir>/tests/integration/setup.ts",
       testTimeout: 30000,
       transform: {
