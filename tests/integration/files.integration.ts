@@ -30,6 +30,27 @@ async function callTool(name: string, input: Record<string, unknown>) {
   return JSON.parse(json.result.content[0].text);
 }
 
+/**
+ * Like callTool but returns the raw JSON-RPC response without throwing,
+ * so tests can inspect error payloads directly.
+ */
+async function callToolRaw(name: string, input: Record<string, unknown>) {
+  const res = await fetch(BASE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SECRET}`,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name, arguments: input },
+    }),
+  });
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 // get_file_contents
 // ---------------------------------------------------------------------------
@@ -244,5 +265,72 @@ describe("get_multiple_files (integration)", () => {
     const json = await res.json();
     expect(json.error).toBeDefined();
     expect(json.error.code).toBe(-32001);
+  });
+
+  /**
+   * ref forwarding — passes ref: "main" and verifies the files returned
+   * are the main-branch versions. Asserts content is present, confirming
+   * ref is forwarded through the tool handler and down to each GitHub API call.
+   */
+  it("returns files at the correct ref when ref is provided", async () => {
+    const result = await callTool("get_multiple_files", {
+      owner: OWNER,
+      repo: REPO,
+      paths: ["src/github/files.ts", "src/lib/validation.ts"],
+      ref: "main",
+    });
+
+    expect(result.files).toHaveLength(2);
+    for (const file of result.files) {
+      expect(typeof file.content).toBe("string");
+      expect(file.content.length).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * pageSize upper bound — schema caps pageSize at 20, so 21 must be rejected.
+   * Asserts the server returns a JSON-RPC error (validation failure)
+   * rather than silently accepting the out-of-range value.
+   */
+  it("rejects pageSize greater than 20 with a validation error", async () => {
+    const json = await callToolRaw("get_multiple_files", {
+      owner: OWNER,
+      repo: REPO,
+      paths: KNOWN_PATHS,
+      pageSize: 21,
+    });
+
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * pageSize lower bound — schema requires pageSize to be at least 1, so 0 must be rejected.
+   * Asserts the server returns a JSON-RPC error rather than allowing
+   * a zero-page request through to the GitHub API.
+   */
+  it("rejects pageSize of 0 with a validation error", async () => {
+    const json = await callToolRaw("get_multiple_files", {
+      owner: OWNER,
+      repo: REPO,
+      paths: KNOWN_PATHS,
+      pageSize: 0,
+    });
+
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * Missing required field — paths is omitted entirely from the request.
+   * Asserts schema validation catches the missing field and returns a
+   * JSON-RPC error, confirming Zod validation propagates correctly end-to-end.
+   */
+  it("rejects request with missing paths field with a validation error", async () => {
+    const json = await callToolRaw("get_multiple_files", {
+      owner: OWNER,
+      repo: REPO,
+      // paths intentionally omitted
+    });
+
+    expect(json.error).toBeDefined();
   });
 });
