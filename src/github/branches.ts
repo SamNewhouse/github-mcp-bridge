@@ -67,11 +67,7 @@ export async function createBranch(
   return { name: newBranch, sha };
 }
 
-export async function getBranch(
-  owner: string,
-  repo: string,
-  branch: string,
-) {
+export async function getBranch(owner: string, repo: string, branch: string) {
   const result = await githubRequest<GitHubBranchDetail>(
     `/repos/${owner}/${repo}/branches/${branch}`,
   );

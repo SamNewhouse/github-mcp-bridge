@@ -20,12 +20,18 @@ function mapGithubStatus(status: number, body: string): AppError {
       if (body.includes("rate limit") || body.includes("API rate limit")) {
         return new AppError("GitHub rate limit exceeded — retry later", 429);
       }
-      return new AppError("GitHub request forbidden — insufficient PAT scopes", 403);
+      return new AppError(
+        "GitHub request forbidden — insufficient PAT scopes",
+        403,
+      );
     }
     case 404:
       return new AppError("GitHub resource not found", 404);
     case 409:
-      return new AppError("GitHub conflict — resource already exists or is out of date", 409);
+      return new AppError(
+        "GitHub conflict — resource already exists or is out of date",
+        409,
+      );
     case 422:
       return new AppError(`GitHub validation error: ${body}`, 422);
     case 429: {
@@ -93,7 +99,10 @@ export async function githubRequest<T>(
       const resetAt = resetEpoch
         ? new Date(Number(resetEpoch) * 1000).toISOString()
         : null;
-      logWarn("github_rate_limit_low", { remaining: Number(remaining), resetAt });
+      logWarn("github_rate_limit_low", {
+        remaining: Number(remaining),
+        resetAt,
+      });
     }
 
     if (!response.ok) {

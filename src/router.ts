@@ -219,15 +219,24 @@ export async function handleMcpRequest(
           method: body.method,
           issues: params.error.issues,
         });
-        return sendJsonRpcError(res, body.id ?? null, -32602, "Invalid params", {
-          issues: params.error.issues,
-        });
+        return sendJsonRpcError(
+          res,
+          body.id ?? null,
+          -32602,
+          "Invalid params",
+          {
+            issues: params.error.issues,
+          },
+        );
       }
 
       const toolName = params.data.name;
       const toolArgs = params.data.arguments;
 
-      log.info("tool_invocation_started", { id: body.id ?? null, tool: toolName });
+      log.info("tool_invocation_started", {
+        id: body.id ?? null,
+        tool: toolName,
+      });
 
       try {
         log.info("tool_invocation_payload", {
@@ -239,7 +248,10 @@ export async function handleMcpRequest(
         const result = await executeTool(toolName, toolArgs);
         const mcpResult = toMcpToolResult(result);
 
-        log.info("tool_invocation_succeeded", { id: body.id ?? null, tool: toolName });
+        log.info("tool_invocation_succeeded", {
+          id: body.id ?? null,
+          tool: toolName,
+        });
 
         return sendJsonRpcResult(res, body.id ?? null, mcpResult);
       } catch (error) {
@@ -252,14 +264,23 @@ export async function handleMcpRequest(
           errorName: error instanceof Error ? error.name : "UnknownError",
         });
 
-        return sendJsonRpcError(res, body.id ?? null, -32603, "Internal error", {
-          tool: toolName,
-          message,
-        });
+        return sendJsonRpcError(
+          res,
+          body.id ?? null,
+          -32603,
+          "Internal error",
+          {
+            tool: toolName,
+            message,
+          },
+        );
       }
     }
 
-    log.warn("jsonrpc_method_not_found", { id: body.id ?? null, method: body.method });
+    log.warn("jsonrpc_method_not_found", {
+      id: body.id ?? null,
+      method: body.method,
+    });
     return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
   } catch (error) {
     const status = getErrorStatus(error);
