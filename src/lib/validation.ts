@@ -62,3 +62,33 @@ export const toolRequestSchema = z.object({
   tool: z.string(),
   input: z.unknown().optional(),
 });
+
+// Issues
+export const issueInputSchema = repositoryInputSchema.extend({
+  issueNumber: z.coerce.number().int().positive(),
+});
+
+export const listIssuesInputSchema = repositoryInputSchema.extend({
+  state: z.enum(["open", "closed", "all"]).default("open"),
+});
+
+export const createIssueInputSchema = repositoryInputSchema.extend({
+  title: z.string().min(1, "title is required"),
+  body: z.string().optional(),
+  labels: z.array(z.string()).optional(),
+  assignees: z.array(z.string()).optional(),
+});
+
+export const updateIssueInputSchema = issueInputSchema.extend({
+  title: z.string().min(1).optional(),
+  body: z.string().optional(),
+  state: z.enum(["open", "closed"]).optional(),
+  labels: z.array(z.string()).optional(),
+  assignees: z.array(z.string()).optional(),
+});
+
+export const linkIssueToPullRequestInputSchema = repositoryInputSchema.extend({
+  pullNumber: z.coerce.number().int().positive(),
+  issueNumber: z.coerce.number().int().positive(),
+  keyword: z.enum(["closes", "fixes", "resolves"]).default("closes"),
+});
