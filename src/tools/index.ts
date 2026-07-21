@@ -1,17 +1,22 @@
 import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { createBranchTool } from "./create-branch";
+import { createIssueTool } from "./create-issue";
 import { createPullRequestTool } from "./create-pull-request";
 import { getFileContentsTool } from "./get-file-contents";
+import { getIssueTool } from "./get-issue";
 import { getMultipleFilesTool } from "./get-multiple-files";
 import { getPullRequestDiffTool } from "./get-pull-request-diff";
 import { getPullRequestTool } from "./get-pull-request";
+import { linkIssueToPullRequestTool } from "./link-issue-to-pull-request";
 import { listBranchesTool } from "./list-branches";
 import { listDirectoryTool } from "./list-directory";
+import { listIssuesTool } from "./list-issues";
 import { listOpenPullRequestsTool } from "./list-open-pull-requests";
 import { listPullRequestCommentsTool } from "./list-pull-request-comments";
 import { listPullRequestFilesTool } from "./list-pull-request-files";
 import { listRepositoriesTool } from "./list-repositories";
+import { updateIssueTool } from "./update-issue";
 import { updatePullRequestTool } from "./update-pull-request";
 import { upsertFileTool } from "./upsert-file";
 
@@ -30,6 +35,11 @@ const tools = [
   upsertFileTool,
   createPullRequestTool,
   getPullRequestDiffTool,
+  listIssuesTool,
+  getIssueTool,
+  createIssueTool,
+  updateIssueTool,
+  linkIssueToPullRequestTool,
 ] as const;
 
 export const toolDefinitions = Object.fromEntries(
