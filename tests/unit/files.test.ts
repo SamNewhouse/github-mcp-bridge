@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { AppError } from "../../src/lib/errors.js";
 
 // Mock the GitHub client before importing the module under test
 jest.mock("../../src/github/client", () => ({
@@ -372,7 +373,6 @@ describe("upsertFile", () => {
    * Asserts created: true is returned.
    */
   it("creates a new file and returns created: true when file does not exist", async () => {
-    const { AppError } = await import("../../src/lib/errors");
     mockGithubRequest
       .mockRejectedValueOnce(new AppError("GitHub resource not found", 404)) // GET existing
       .mockResolvedValueOnce(makeUpsertResponse()); // PUT
@@ -408,7 +408,6 @@ describe("upsertFile", () => {
    * back to the original string.
    */
   it("base64-encodes the content in the PUT body", async () => {
-    const { AppError } = await import("../../src/lib/errors");
     mockGithubRequest
       .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
       .mockResolvedValueOnce(makeUpsertResponse());
@@ -426,7 +425,6 @@ describe("upsertFile", () => {
    * not POST, which is what the GitHub Contents API requires.
    */
   it("uses the PUT HTTP method", async () => {
-    const { AppError } = await import("../../src/lib/errors");
     mockGithubRequest
       .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
       .mockResolvedValueOnce(makeUpsertResponse());
@@ -442,7 +440,6 @@ describe("upsertFile", () => {
    * sub-objects with the expected fields.
    */
   it("returns file and commit fields in the response", async () => {
-    const { AppError } = await import("../../src/lib/errors");
     mockGithubRequest
       .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
       .mockResolvedValueOnce(makeUpsertResponse());
@@ -467,7 +464,6 @@ describe("upsertFile", () => {
    * rather than silently swallowed.
    */
   it("rethrows non-404 errors from the existence check", async () => {
-    const { AppError } = await import("../../src/lib/errors");
     mockGithubRequest.mockRejectedValueOnce(
       new AppError("GitHub request forbidden", 403)
     );
