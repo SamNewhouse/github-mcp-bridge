@@ -15,7 +15,7 @@ export function getRequestId(req: http.IncomingMessage): string {
   return crypto.randomUUID();
 }
 
-export function getDurationMs(startedAt: number): number {
+function getDurationMs(startedAt: number): number {
   return Date.now() - startedAt;
 }
 
