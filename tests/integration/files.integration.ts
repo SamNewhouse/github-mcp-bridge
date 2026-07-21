@@ -34,6 +34,11 @@ async function callTool(name: string, input: Record<string, unknown>) {
 // get_file_contents
 // ---------------------------------------------------------------------------
 describe("get_file_contents (integration)", () => {
+  /**
+   * Happy path — fetches a known small file from the live repo.
+   * Asserts the response shape is correct, content contains expected
+   * source text, truncated is false, and path is echoed back.
+   */
   it("returns content and truncated: false for a known small file", async () => {
     const result = await callTool("get_file_contents", {
       owner: OWNER,
@@ -47,6 +52,11 @@ describe("get_file_contents (integration)", () => {
     expect(result.file.path).toBe("src/github/files.ts");
   });
 
+  /**
+   * Directory rejection — passes a directory path instead of a file path.
+   * Asserts the tool throws, exercising the type guard that calls
+   * AppError(400) when GitHub returns a directory entry.
+   */
   it("returns a 400 error when path is a directory", async () => {
     await expect(
       callTool("get_file_contents", {
@@ -57,6 +67,11 @@ describe("get_file_contents (integration)", () => {
     ).rejects.toThrow();
   });
 
+  /**
+   * Not found — passes a path that does not exist in the repo.
+   * Asserts the tool throws, exercising the 404 path from GitHub
+   * being surfaced as an error to the caller.
+   */
   it("returns a 404 error for a non-existent file", async () => {
     await expect(
       callTool("get_file_contents", {
@@ -67,6 +82,11 @@ describe("get_file_contents (integration)", () => {
     ).rejects.toThrow();
   });
 
+  /**
+   * Ref parameter — fetches the same file pinned to the main branch.
+   * Asserts that the ref query param is correctly forwarded to GitHub
+   * and a valid string is returned (content may differ from HEAD).
+   */
   it("returns file at the correct ref when ref is provided", async () => {
     const result = await callTool("get_file_contents", {
       owner: OWNER,
@@ -91,6 +111,11 @@ describe("get_multiple_files (integration)", () => {
     "src/tools/get-multiple-files.ts",
   ];
 
+  /**
+   * All files under pageSize — 4 known paths with the default pageSize of 10.
+   * Asserts all 4 are returned in one page with hasMore false,
+   * nextCursor null, and total/returned both equal to 4.
+   */
   it("returns all 4 files with hasMore: false when under pageSize", async () => {
     const result = await callTool("get_multiple_files", {
       owner: OWNER,
@@ -105,6 +130,11 @@ describe("get_multiple_files (integration)", () => {
     expect(result.pagination.returned).toBe(4);
   });
 
+  /**
+   * Response shape — verifies each returned file object has the expected fields.
+   * Asserts content is a non-empty string and truncated is a boolean,
+   * covering the contract the MCP client depends on.
+   */
   it("each returned file has content and truncated flag", async () => {
     const result = await callTool("get_multiple_files", {
       owner: OWNER,
@@ -119,6 +149,11 @@ describe("get_multiple_files (integration)", () => {
     }
   });
 
+  /**
+   * Two-page pagination — 4 paths fetched with pageSize: 2.
+   * Fetches page 1, uses nextCursor to fetch page 2, then asserts
+   * the two pages contain no overlapping paths and together cover all 4 files.
+   */
   it("paginates correctly — pageSize: 2 returns first 2 then next 2", async () => {
     const page1 = await callTool("get_multiple_files", {
       owner: OWNER,
@@ -148,6 +183,11 @@ describe("get_multiple_files (integration)", () => {
     expect(page1Paths).not.toEqual(expect.arrayContaining(page2Paths));
   });
 
+  /**
+   * Deduplication — 4 paths where each appears twice.
+   * Asserts the server deduplicates before fetching, returning only
+   * 2 unique files with total reflecting the deduplicated count.
+   */
   it("deduplicates paths — 4 paths with 2 duplicates returns 2 unique files", async () => {
     const result = await callTool("get_multiple_files", {
       owner: OWNER,
@@ -164,6 +204,11 @@ describe("get_multiple_files (integration)", () => {
     expect(result.pagination.total).toBe(2);
   });
 
+  /**
+   * Out-of-bounds cursor — cursor 999 on a 4-file list.
+   * Asserts an empty files array is returned with hasMore false,
+   * matching the unit test behaviour but verified end-to-end.
+   */
   it("returns empty result when cursor is beyond total", async () => {
     const result = await callTool("get_multiple_files", {
       owner: OWNER,
@@ -176,6 +221,11 @@ describe("get_multiple_files (integration)", () => {
     expect(result.pagination.hasMore).toBe(false);
   });
 
+  /**
+   * Auth rejection — request sent without an Authorization header.
+   * Asserts the server returns a JSON-RPC error with code -32001
+   * (Unauthorised) without touching the GitHub API.
+   */
   it("rejects unauthenticated requests with an error", async () => {
     const res = await fetch(BASE_URL, {
       method: "POST",
