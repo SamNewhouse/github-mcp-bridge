@@ -7,10 +7,10 @@ const config: Config = {
       testEnvironment: "node",
       roots: ["<rootDir>/src/tests/unit"],
       transform: {
-        "^.+\\.tsx?$": [
+        "^.+\.tsx?$": [
           "ts-jest",
           {
-            tsconfig: "tsconfig.json",
+            tsconfig: "tsconfig.test.json",
           },
         ],
       },
@@ -23,10 +23,10 @@ const config: Config = {
       globalSetup: "<rootDir>/src/tests/integration/setup.ts",
       testTimeout: 30000,
       transform: {
-        "^.+\\.tsx?$": [
+        "^.+\.tsx?$": [
           "ts-jest",
           {
-            tsconfig: "tsconfig.json",
+            tsconfig: "tsconfig.test.json",
           },
         ],
       },
