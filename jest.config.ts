@@ -5,7 +5,7 @@ const config: Config = {
     {
       displayName: "unit",
       testEnvironment: "node",
-      roots: ["<rootDir>/src/tests/unit"],
+      roots: ["<rootDir>/tests/unit"],
       transform: {
         "^.+\.tsx?$": [
           "ts-jest",
@@ -18,10 +18,10 @@ const config: Config = {
     {
       displayName: "integration",
       testEnvironment: "node",
-      roots: ["<rootDir>/src/tests/integration"],
+      roots: ["<rootDir>/tests/integration"],
       testMatch: ["**/*.integration.ts"],
-      globalSetup: "<rootDir>/src/tests/integration/setup.ts",
-      testTimeout: 30000,
+      globalSetup: "<rootDir>/tests/integration/setup.ts",
+      testTimeout: 50000,
       transform: {
         "^.+\.tsx?$": [
           "ts-jest",

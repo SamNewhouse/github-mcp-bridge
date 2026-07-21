@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2024",
     "module": "CommonJS",
+    "outDir": "dist-test",
     "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
@@ -10,6 +11,6 @@
     "resolveJsonModule": true,
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

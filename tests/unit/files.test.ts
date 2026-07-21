@@ -1,12 +1,12 @@
 import { Buffer } from "node:buffer";
 
 // Mock the GitHub client before importing the module under test
-jest.mock("../github/client", () => ({
+jest.mock("../../src/github/client", () => ({
   githubRequest: jest.fn(),
 }));
 
-import { githubRequest } from "../../github/client";
-import { getFileContents, getMultipleFiles } from "../../github/files";
+import { githubRequest } from "../../src/github/client";
+import { getFileContents, getMultipleFiles } from "../../src/github/files";
 
 const mockGithubRequest = githubRequest as jest.MockedFunction<
   typeof githubRequest
