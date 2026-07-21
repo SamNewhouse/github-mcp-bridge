@@ -1,97 +1,88 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-
-export type McpAgentClientOptions = {
-  serverUrl: string;
-  apiKey?: string;
-  serverName?: string;
-  serverVersion?: string;
-};
-
 export type AgentTool = {
   name: string;
   description?: string;
   inputSchema?: unknown;
 };
 
-type ToolContentBlock =
-  | { type: "text"; text: string }
-  | Record<string, unknown>;
+type JsonRpcResponse<T> =
+  | { result: T }
+  | { error: { code: number; message: string; data?: unknown } };
 
 export class McpAgentClient {
-  private readonly client: Client;
-  private transport: StreamableHTTPClientTransport | null = null;
-  private readonly serverUrl: string;
-  private readonly apiKey?: string;
+  private id = 1;
+  private initialized = false;
 
-  constructor(options: McpAgentClientOptions) {
-    this.serverUrl = options.serverUrl;
-    this.apiKey = options.apiKey;
+  constructor(
+    private readonly serverUrl: string,
+    private readonly apiKey?: string,
+  ) {}
 
-    this.client = new Client({
-      name: options.serverName ?? "github-mcp-bridge-agent",
-      version: options.serverVersion ?? "1.0.0",
+  private get headers(): HeadersInit {
+    return {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
+    };
+  }
+
+  private async request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    const response = await fetch(this.serverUrl, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: this.id++,
+        method,
+        params,
+      }),
     });
+
+    const json = (await response.json()) as JsonRpcResponse<T>;
+
+    if ("error" in json) {
+      throw new Error(
+        `MCP error ${json.error.code}: ${json.error.message}${
+          json.error.data ? ` ${JSON.stringify(json.error.data)}` : ""
+        }`,
+      );
+    }
+
+    return json.result;
   }
 
   async connect(): Promise<void> {
-    if (this.transport) return;
+    if (this.initialized) return;
 
-    const authFetch: typeof fetch = async (input, init) => {
-      const headers = new Headers(init?.headers ?? {});
-
-      if (this.apiKey) {
-        headers.set("authorization", `Bearer ${this.apiKey}`);
-      }
-
-      headers.set("accept", "application/json, text/event-stream");
-
-      return fetch(input, {
-        ...init,
-        headers,
-      });
-    };
-
-    this.transport = new StreamableHTTPClientTransport(new URL(this.serverUrl), {
-      fetch: authFetch,
+    await this.request("initialize", {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: {
+        name: "github-mcp-bridge-agent",
+        version: "1.0.0",
+      },
     });
 
-    await this.client.connect(this.transport);
-  }
+    await fetch(this.serverUrl, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+      }),
+    });
 
-  async close(): Promise<void> {
-    await this.client.close();
-    this.transport = null;
+    this.initialized = true;
   }
 
   async listTools(): Promise<AgentTool[]> {
-    const result = await this.client.listTools();
-    return result.tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    }));
+    const result = await this.request<{ tools: AgentTool[] }>("tools/list");
+    return result.tools;
   }
 
-  async callTool(
-    name: string,
-    args: Record<string, unknown> = {},
-  ): Promise<string> {
-    const result = await this.client.callTool({
+  async callTool(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+    return this.request("tools/call", {
       name,
       arguments: args,
     });
-
-    const content: ToolContentBlock[] = Array.isArray(result.content)
-      ? (result.content as ToolContentBlock[])
-      : [];
-
-    return content
-      .map((item) =>
-        item.type === "text" && typeof item.text === "string"
-          ? item.text
-          : JSON.stringify(item),
-      )
-      .join("\n");
   }
 }
