@@ -8,17 +8,17 @@ export class AppError extends Error {
   }
 }
 
-export function getErrorStatus(error: unknown): number {
-  if (
+function hasStatus(error: unknown): error is { status: number } {
+  return (
     typeof error === "object" &&
     error !== null &&
     "status" in error &&
-    typeof (error as { status?: unknown }).status === "number"
-  ) {
-    return (error as { status: number }).status;
-  }
+    typeof (error as Record<string, unknown>).status === "number"
+  );
+}
 
-  return 500;
+export function getErrorStatus(error: unknown): number {
+  return hasStatus(error) ? error.status : 500;
 }
 
 export function getErrorMessage(error: unknown): string {
