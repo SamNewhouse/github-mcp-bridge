@@ -10,7 +10,7 @@ const config: Config = {
         "^.+\\.tsx?$": [
           "ts-jest",
           {
-            tsconfig: "tsconfig.test.json",
+            tsconfig: "tsconfig.json",
           },
         ],
       },
@@ -26,7 +26,7 @@ const config: Config = {
         "^.+\\.tsx?$": [
           "ts-jest",
           {
-            tsconfig: "tsconfig.test.json",
+            tsconfig: "tsconfig.json",
           },
         ],
       },

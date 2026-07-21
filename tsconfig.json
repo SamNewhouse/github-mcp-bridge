@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2024",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "es2022",
+    "moduleResolution": "bundler",
     "outDir": "dist",
     "rewriteRelativeImportExtensions": true,
     "strict": true,
@@ -13,5 +13,4 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "api/**/*.ts"],
-  "exclude": ["src/tests"]
 }
