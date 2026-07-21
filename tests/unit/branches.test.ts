@@ -103,10 +103,11 @@ describe("createBranch", () => {
 describe("getBranch", () => {
   /**
    * Happy path — returns structured detail including latest_commit.
-   * Asserts all fields are correctly extracted from the nested GitHub response,
-   * including html_url from the commit object.
+   * Asserts all fields are correctly extracted from the nested GitHub response.
+   * html_url is mapped to the top-level result (from result.commit.html_url),
+   * not nested inside latest_commit which only contains message/author/date.
    */
-  it("returns branch detail with latest_commit fields including html_url", async () => {
+  it("returns branch detail with latest_commit fields and top-level html_url", async () => {
     mock.mockResolvedValueOnce({
       name: "main",
       commit: {
@@ -125,9 +126,9 @@ describe("getBranch", () => {
     expect(result.name).toBe("main");
     expect(result.sha).toBe("abc123");
     expect(result.protected).toBe(true);
+    expect(result.html_url).toBe("https://github.com/owner/repo/commit/abc123");
     expect(result.latest_commit.message).toBe("Initial commit");
     expect(result.latest_commit.author).toBe("Alice");
     expect(result.latest_commit.date).toBe("2026-01-01T00:00:00Z");
-    expect(result.latest_commit.html_url).toBe("https://github.com/owner/repo/commit/abc123");
   });
 });
