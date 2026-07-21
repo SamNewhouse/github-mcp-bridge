@@ -245,4 +245,76 @@ describe("getMultipleFiles", () => {
     expect(result.pagination.hasMore).toBe(true);
     expect(result.pagination.nextCursor).toBe(1);
   });
+
+  /**
+   * First-file budget guard — the very first file in the page already exceeds
+   * the 3.5 MB budget by itself. Asserts it is still returned (to avoid an
+   * infinite pagination loop where nothing would ever be yielded), hasMore is
+   * true, and nextCursor points past it so subsequent pages can make progress.
+   */
+  it("includes the first file even when it alone exceeds the byte budget", async () => {
+    const BUDGET = 3.5 * 1024 * 1024;
+    const huge = "x".repeat(Math.ceil(BUDGET) + 1);
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(huge, "src/a.ts"));
+
+    const result = await getMultipleFiles("owner", "repo", ["src/a.ts", "src/b.ts"]);
+
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]!.path).toBe("src/a.ts");
+    expect(result.pagination.hasMore).toBe(true);
+    expect(result.pagination.nextCursor).toBe(1);
+  });
+
+  /**
+   * ref forwarding — verifies that the ref argument is threaded through
+   * to every underlying getFileContents call. Checks the URL passed to
+   * githubRequest contains the encoded ref query param.
+   */
+  it("forwards ref to each getFileContents call", async () => {
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", "src/a.ts"));
+
+    await getMultipleFiles("owner", "repo", ["src/a.ts"], "my-branch");
+
+    const calledUrl = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
+    expect(calledUrl).toContain("ref=my-branch");
+  });
+
+  /**
+   * Cursor exactly at total — cursor set to the exact length of the path list.
+   * Distinct from cursor > total: Math.min(cursor, total) returns total,
+   * slice(total, total) is empty. Asserts no files and no API calls.
+   */
+  it("returns empty result when cursor equals total exactly", async () => {
+    const singlePath = ["src/a.ts"];
+
+    const result = await getMultipleFiles(
+      "owner",
+      "repo",
+      singlePath,
+      undefined,
+      1 // cursor === total (1)
+    );
+
+    expect(result.files).toHaveLength(0);
+    expect(result.pagination.hasMore).toBe(false);
+    expect(result.pagination.nextCursor).toBeNull();
+    expect(mockGithubRequest).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Single file, fully consumed — 1-path list with default pageSize 10.
+   * Asserts exactly 1 file is returned, hasMore is false, nextCursor is null,
+   * and total and returned are both 1.
+   */
+  it("returns hasMore: false and nextCursor: null for a single file list", async () => {
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", "src/a.ts"));
+
+    const result = await getMultipleFiles("owner", "repo", ["src/a.ts"]);
+
+    expect(result.files).toHaveLength(1);
+    expect(result.pagination.hasMore).toBe(false);
+    expect(result.pagination.nextCursor).toBeNull();
+    expect(result.pagination.total).toBe(1);
+    expect(result.pagination.returned).toBe(1);
+  });
 });
