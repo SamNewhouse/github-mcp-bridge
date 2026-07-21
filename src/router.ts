@@ -102,7 +102,6 @@ export async function handleMcpRequest(
       return sendJson(res, 404, { error: "Not found" });
     }
 
-    // Auth applies to all methods on / (GET manifest + POST JSON-RPC)
     assertAuthorized(req, log);
 
     if (req.method === "GET") {
