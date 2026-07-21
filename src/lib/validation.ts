@@ -50,11 +50,6 @@ export const updatePullRequestInputSchema = pullRequestInputSchema.extend({
   state: z.enum(["open", "closed"]).optional(),
 });
 
-export const createPullRequestCommentInputSchema =
-  pullRequestInputSchema.extend({
-    body: z.string().min(1, "body is required"),
-  });
-
 export const upsertFileInputSchema = repositoryInputSchema.extend({
   path: z.string().min(1, "path is required"),
   content: z.string(),
