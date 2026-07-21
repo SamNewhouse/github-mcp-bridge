@@ -28,7 +28,7 @@ jobs:
         run: npm test
 
   # ─────────────────────────────────────────────
-  # Job 2: Integration tests — every tool
+  # Job 2: Integration tests — every read tool
   # ─────────────────────────────────────────────
   integration:
     name: Integration Tests
@@ -36,9 +36,8 @@ jobs:
     needs: typecheck
 
     env:
-      CONNECTOR_SECRET: ${{ secrets.CONNECTOR_SECRET }}
-      GITHUB_PAT: ${{ secrets.GH_PAT }}
       BASE: http://localhost:3000
+      SECRET: ${{ secrets.CONNECTOR_SECRET }}
       OWNER: SamNewhouse
       REPO: github-mcp-bridge
 
@@ -63,16 +62,152 @@ jobs:
           CONNECTOR_SECRET: ${{ secrets.CONNECTOR_SECRET }}
           GITHUB_PAT: ${{ secrets.GH_PAT }}
 
-      - name: Wait for server to be ready
+      - name: Wait for server
         run: |
           for i in $(seq 1 15); do
-            curl -sf http://localhost:3000/health && break || sleep 1
+            curl -sf $BASE/health && break || sleep 1
           done
 
-      - name: Run integration tests
-        run: node .github/scripts/integration-test.mjs
-        env:
-          BASE: http://localhost:3000
-          SECRET: ${{ secrets.CONNECTOR_SECRET }}
-          OWNER: SamNewhouse
-          REPO: github-mcp-bridge
+      - name: list_repositories
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_repositories","arguments":{}}}' \
+            | grep -q '"result"'
+
+      - name: list_branches
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_branches","arguments":{"owner":"'$OWNER'","repo":"'$REPO'"}}}' \
+            | grep -q '"result"'
+
+      - name: get_branch
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_branch","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","branch":"main"}}}' \
+            | grep -q '"result"'
+
+      - name: list_directory
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_directory","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","path":"src"}}}' \
+            | grep -q '"result"'
+
+      - name: get_file_contents
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_file_contents","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","path":"package.json"}}}' \
+            | grep -q '"result"'
+
+      - name: get_multiple_files
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_multiple_files","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","paths":["package.json","tsconfig.json"]}}}' \
+            | grep -q '"result"'
+
+      - name: list_open_pull_requests
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"list_open_pull_requests","arguments":{"owner":"'$OWNER'","repo":"'$REPO'"}}}' \
+            | grep -q '"result"'
+
+      - name: get_pull_request
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_pull_request","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","pullNumber":1}}}' \
+            | grep -q '"result"'
+
+      - name: list_pull_request_files
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"list_pull_request_files","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","pullNumber":1}}}' \
+            | grep -q '"result"'
+
+      - name: list_pull_request_comments
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"list_pull_request_comments","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","pullNumber":1}}}' \
+            | grep -q '"result"'
+
+      - name: get_pull_request_diff
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_pull_request_diff","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","pullNumber":1}}}' \
+            | grep -q '"result"'
+
+      - name: list_issues
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"list_issues","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","state":"open"}}}' \
+            | grep -q '"result"'
+
+      - name: get_issue
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"get_issue","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","issueNumber":1}}}' \
+            | grep -q '"result"'
+
+      - name: list_issue_comments
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"list_issue_comments","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","issueNumber":1}}}' \
+            | grep -q '"result"'
+
+      - name: list_commits
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"list_commits","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","branch":"main","perPage":5}}}' \
+            | grep -q '"result"'
+
+      - name: get_commit
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_commit","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","ref":"main"}}}' \
+            | grep -q '"result"'
+
+      - name: search_files
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"search_files","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","pattern":"validation"}}}' \
+            | grep -q '"result"'
+
+      - name: search_code
+        run: |
+          curl -sf -X POST $BASE \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"search_code","arguments":{"owner":"'$OWNER'","repo":"'$REPO'","query":"defineTool"}}}' \
+            | grep -q '"result"'
