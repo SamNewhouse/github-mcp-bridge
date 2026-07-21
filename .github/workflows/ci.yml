@@ -28,7 +28,8 @@ jobs:
         run: npm test
 
   # ─────────────────────────────────────────────────────
-  # Job 2: Integration tests
+  # Job 2: Integration tests against live Vercel deployment
+  # Requires secrets: CONNECTOR_SECRET, VERCEL_DEPLOYMENT_URL
   # ─────────────────────────────────────────────────────
   integration:
     name: Integration Tests
@@ -46,34 +47,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
-
-      - name: Start server
-        run: node dist/server.js &
-        env:
-          PORT: 3000
-          CONNECTOR_SECRET: ${{ secrets.CONNECTOR_SECRET }}
-          GITHUB_PAT: ${{ secrets.GH_PAT }}
-
-      - name: Wait for server
-        run: |
-          echo "Waiting for server to be ready..."
-          for i in $(seq 1 20); do
-            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
-              echo "Server is ready after ${i}s"
-              exit 0
-            fi
-            echo "  attempt ${i}/20..."
-            sleep 1
-          done
-          echo "ERROR: Server did not become ready in time"
-          exit 1
-
       - name: Run integration tests
         run: node .github/scripts/integration-test.mjs
         env:
-          BASE: http://localhost:3000
+          BASE: ${{ secrets.VERCEL_DEPLOYMENT_URL }}
           SECRET: ${{ secrets.CONNECTOR_SECRET }}
           OWNER: SamNewhouse
           REPO: github-mcp-bridge
