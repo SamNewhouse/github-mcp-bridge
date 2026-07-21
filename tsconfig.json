@@ -12,5 +12,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "api/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/tests", "tests"]
+  "exclude": ["node_modules", "dist"]
 }
