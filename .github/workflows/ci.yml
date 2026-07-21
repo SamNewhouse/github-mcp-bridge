@@ -45,7 +45,7 @@ jobs:
     name: Integration tests
     runs-on: ubuntu-latest
     env:
-      GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+      GITHUB_PAT: ${{ secrets.GH_PAT }}
       CONNECTOR_SECRET: ${{ secrets.CONNECTOR_SECRET }}
     steps:
       - uses: actions/checkout@v4
