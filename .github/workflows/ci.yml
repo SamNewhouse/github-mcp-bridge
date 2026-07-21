@@ -7,9 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────
   # Job 1: TypeScript type-check
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
@@ -27,9 +27,9 @@ jobs:
       - name: Type-check
         run: npm test
 
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────
   # Job 2: Integration tests
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -58,9 +58,17 @@ jobs:
 
       - name: Wait for server
         run: |
-          for i in $(seq 1 15); do
-            curl -sf http://localhost:3000/health && echo && break || sleep 1
+          echo "Waiting for server to be ready..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+              echo "Server is ready after ${i}s"
+              exit 0
+            fi
+            echo "  attempt ${i}/20..."
+            sleep 1
           done
+          echo "ERROR: Server did not become ready in time"
+          exit 1
 
       - name: Run integration tests
         run: node .github/scripts/integration-test.mjs
