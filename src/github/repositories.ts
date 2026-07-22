@@ -1,4 +1,5 @@
 import { githubRequest } from "./client";
+
 type GitHubFullRepository = {
   id: number;
   name: string;
