@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { AppError } from "../lib/errors";
+import type { PatchOp } from "../lib/validation";
 import { githubRequest } from "./client";
 
 // Keep each response comfortably under Vercel's 4.5 MB payload cap.
@@ -31,6 +32,14 @@ type GitHubUpsertFileResponse = {
     sha: string;
     size: number;
   };
+  commit: {
+    sha: string;
+    html_url: string;
+    message: string;
+  };
+};
+
+type GitHubDeleteFileResponse = {
   commit: {
     sha: string;
     html_url: string;
@@ -252,5 +261,178 @@ export async function upsertFile(
       message: response.commit.message,
     },
     created: !existingSha,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// delete_file
+// ---------------------------------------------------------------------------
+export async function deleteFile(
+  owner: string,
+  repo: string,
+  input: {
+    path: string;
+    branch: string;
+    message: string;
+  },
+) {
+  // Fetch the current file to obtain its SHA (required by the GitHub API).
+  const existing = await githubRequest<GitHubContentFile>(
+    `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
+  );
+
+  if (existing.type !== "file") {
+    throw new AppError(`Path is not a file: ${input.path}`, 400);
+  }
+
+  const response = await githubRequest<GitHubDeleteFileResponse>(
+    `/repos/${owner}/${repo}${buildContentsPath(input.path)}`,
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: input.message,
+        sha: existing.sha,
+        branch: input.branch,
+      }),
+    },
+  );
+
+  return {
+    deleted: true,
+    path: input.path,
+    commit: {
+      sha: response.commit.sha,
+      html_url: response.commit.html_url,
+      message: response.commit.message,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// patch_file
+// ---------------------------------------------------------------------------
+
+/** Apply a single patch operation to a text string. */
+function applyPatchOp(content: string, op: PatchOp): string {
+  switch (op.op) {
+    case "replace_once": {
+      if (!content.includes(op.find)) {
+        throw new AppError(
+          `patch_file: replace_once — find text not found: ${JSON.stringify(op.find)}`,
+          422,
+        );
+      }
+      return content.replace(op.find, op.replace);
+    }
+
+    case "replace_all": {
+      if (!content.includes(op.find)) {
+        throw new AppError(
+          `patch_file: replace_all — find text not found: ${JSON.stringify(op.find)}`,
+          422,
+        );
+      }
+      // Escape special regex characters so literal strings are matched.
+      const escaped = op.find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return content.replace(new RegExp(escaped, "g"), op.replace);
+    }
+
+    case "insert_before": {
+      if (!content.includes(op.anchor)) {
+        throw new AppError(
+          `patch_file: insert_before — anchor text not found: ${JSON.stringify(op.anchor)}`,
+          422,
+        );
+      }
+      return content.replace(op.anchor, `${op.content}${op.anchor}`);
+    }
+
+    case "insert_after": {
+      if (!content.includes(op.anchor)) {
+        throw new AppError(
+          `patch_file: insert_after — anchor text not found: ${JSON.stringify(op.anchor)}`,
+          422,
+        );
+      }
+      return content.replace(op.anchor, `${op.anchor}${op.content}`);
+    }
+  }
+}
+
+export async function patchFile(
+  owner: string,
+  repo: string,
+  input: {
+    path: string;
+    branch: string;
+    message: string;
+    patches: PatchOp[];
+  },
+) {
+  // Read the current file.
+  const existing = await githubRequest<GitHubContentFile>(
+    `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
+  );
+
+  if (existing.type !== "file") {
+    throw new AppError(`Path is not a file: ${input.path}`, 400);
+  }
+
+  // Reject binary content — base64-encoded binary will not decode to valid UTF-8 text.
+  const rawContent = existing.content.replace(/\n/g, "");
+  if (existing.encoding !== "base64") {
+    throw new AppError(
+      `patch_file: unsupported encoding "${existing.encoding}"`,
+      422,
+    );
+  }
+
+  let text = Buffer.from(rawContent, "base64").toString("utf8");
+
+  // Heuristic binary guard: if the decoded content contains a null byte it is
+  // almost certainly binary — refuse rather than corrupt.
+  if (text.includes("\0")) {
+    throw new AppError(
+      `patch_file: refusing to patch binary file: ${input.path}`,
+      422,
+    );
+  }
+
+  // Apply each patch in order.
+  for (const op of input.patches) {
+    text = applyPatchOp(text, op);
+  }
+
+  // Write the patched content back.
+  const response = await githubRequest<GitHubUpsertFileResponse>(
+    `/repos/${owner}/${repo}${buildContentsPath(input.path)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: input.message,
+        content: Buffer.from(text, "utf8").toString("base64"),
+        branch: input.branch,
+        sha: existing.sha,
+      }),
+    },
+  );
+
+  return {
+    patched: true,
+    path: input.path,
+    patchesApplied: input.patches.length,
+    file: {
+      name: response.content.name,
+      path: response.content.path,
+      sha: response.content.sha,
+      size: response.content.size,
+    },
+    commit: {
+      sha: response.commit.sha,
+      html_url: response.commit.html_url,
+      message: response.commit.message,
+    },
   };
 }
