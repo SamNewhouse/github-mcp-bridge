@@ -350,14 +350,36 @@ describe("list_issues (integration)", () => {
   });
 });
 
+// The first closed integration-test issue created by the old test suite.
+// It is permanently closed and safe to use as a stable read fixture.
+const KNOWN_ISSUE_NUMBER = 15;
+
 /**
  * get_issue (integration)
  *
- * Verifies the tool correctly rejects a PR number (GitHub returns issue-like
- * data for PRs on the /issues endpoint) and throws for a non-existent issue
- * number. Note: a positive happy-path test requires a known real issue number.
+ * Verifies the tool returns the expected shape for a known closed issue.
+ * Also confirms a PR number is rejected by the pull_request guard, and
+ * that a non-existent issue number throws.
  */
 describe("get_issue (integration)", () => {
+  it("returns the expected fields for a known closed issue", async () => {
+    const result = await callTool("get_issue", {
+      owner: OWNER,
+      repo: REPO,
+      issueNumber: KNOWN_ISSUE_NUMBER,
+    });
+    expect(result.issue).toHaveProperty("number", KNOWN_ISSUE_NUMBER);
+    expect(result.issue).toHaveProperty("title");
+    expect(result.issue).toHaveProperty("state", "closed");
+    expect(result.issue).toHaveProperty("html_url");
+    expect(result.issue).toHaveProperty("author");
+    expect(result.issue).toHaveProperty("body");
+    expect(result.issue).toHaveProperty("labels");
+    expect(result.issue).toHaveProperty("assignees");
+    expect(result.issue).toHaveProperty("created_at");
+    expect(result.issue).toHaveProperty("updated_at");
+  });
+
   it("throws when the number belongs to a pull request", async () => {
     await expect(
       callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER })
@@ -368,6 +390,31 @@ describe("get_issue (integration)", () => {
     await expect(
       callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: 999999 })
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * create_issue (integration — validation only)
+ *
+ * Does NOT create real issues. Verifies the input validation layer only:
+ * missing required fields must be rejected before any GitHub API call is made.
+ * Real creation is covered by the create_issue unit tests.
+ */
+describe("create_issue (integration — validation)", () => {
+  it("rejects request with missing title field", async () => {
+    const json = await callToolRaw("create_issue", {
+      owner: OWNER,
+      repo: REPO,
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  it("rejects request with missing owner field", async () => {
+    const json = await callToolRaw("create_issue", {
+      repo: REPO,
+      title: "should not be created",
+    });
+    expect(json.error).toBeDefined();
   });
 });
 
