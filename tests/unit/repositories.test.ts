@@ -25,9 +25,14 @@ function makeRepo(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// listRepositories
-// ---------------------------------------------------------------------------
+/**
+ * listRepositories
+ *
+ * Fetches all repositories accessible to the configured PAT and maps each
+ * GitHub repo object to a flat shape. owner is flattened from owner.login.
+ * The request is sorted by most recently updated and uses per_page=100 to
+ * return as many repos as possible in a single call.
+ */
 describe("listRepositories", () => {
   /**
    * Return shape — verifies all mapped fields are present and correctly

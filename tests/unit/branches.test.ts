@@ -11,9 +11,13 @@ beforeEach(() => {
   mock.mockReset();
 });
 
-// ---------------------------------------------------------------------------
-// listBranches
-// ---------------------------------------------------------------------------
+/**
+ * listBranches
+ *
+ * Fetches all branches for a repository and maps each GitHub branch object
+ * to a flat { name, sha, protected } shape. sha is extracted from the nested
+ * commit.sha field. The request uses per_page=100 to avoid pagination.
+ */
 describe("listBranches", () => {
   /**
    * Return shape — verifies each branch is mapped to name, sha, and protected.
@@ -58,9 +62,13 @@ describe("listBranches", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// createBranch
-// ---------------------------------------------------------------------------
+/**
+ * createBranch
+ *
+ * Creates a new branch by first resolving the base branch's SHA via a GET,
+ * then POSTing a new ref to git/refs. Returns the new branch name and the
+ * base SHA used to create it. Expects exactly two API calls per invocation.
+ */
 describe("createBranch", () => {
   /**
    * Happy path — base branch exists; asserts the new branch name and
@@ -97,9 +105,14 @@ describe("createBranch", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getBranch
-// ---------------------------------------------------------------------------
+/**
+ * getBranch
+ *
+ * Fetches detailed information for a single branch, including the latest
+ * commit's message, author, and date. Returns a flat structure with
+ * html_url at the top level (sourced from commit.html_url) and a
+ * latest_commit sub-object.
+ */
 describe("getBranch", () => {
   /**
    * Happy path — returns structured detail including latest_commit.

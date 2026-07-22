@@ -1,7 +1,5 @@
-// ---------------------------------------------------------------------------
 // Splash page components
 // Each function returns an HTML string fragment. Compose them in getSplashHtml.
-// ---------------------------------------------------------------------------
 
 function splashHead(): string {
   return `
@@ -132,9 +130,7 @@ function splashFooter(): string {
   </div>`;
 }
 
-// ---------------------------------------------------------------------------
 // Compose all components into the final page
-// ---------------------------------------------------------------------------
 
 export function getSplashHtml(toolCount: number): string {
   return `<!DOCTYPE html>

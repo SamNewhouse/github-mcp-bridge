@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import { AppError } from "../../src/lib/errors";
 
-// Mock the GitHub client before importing the module under test
 jest.mock("../../src/github/client", () => ({
   githubRequest: jest.fn(),
 }));
@@ -12,13 +11,14 @@ import {
   getMultipleFiles,
   listDirectory,
   upsertFile,
+  patchFile,
+  deleteFile,
 } from "../../src/github/files";
 
 const mockGithubRequest = githubRequest as jest.MockedFunction<
   typeof githubRequest
 >;
 
-// Helper to build a fake GitHub file response
 function makeGitHubFile(content: string, path = "src/example.ts") {
   return {
     type: "file" as const,
@@ -48,9 +48,14 @@ beforeEach(() => {
   mockGithubRequest.mockReset();
 });
 
-// ---------------------------------------------------------------------------
-// getFileContents
-// ---------------------------------------------------------------------------
+/**
+ * getFileContents
+ *
+ * Fetches a single file by path and decodes its base64 content. Enforces a
+ * 3.5 MB budget matching the Vercel payload cap — files that exceed the limit
+ * are sliced and returned with truncated: true plus fullSizeBytes and
+ * truncatedAt metadata. Throws AppError when the path resolves to a directory.
+ */
 describe("getFileContents", () => {
   /**
    * Happy path — a normal file well within the 3.5 MB budget.
@@ -137,9 +142,15 @@ describe("getFileContents", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getMultipleFiles
-// ---------------------------------------------------------------------------
+/**
+ * getMultipleFiles
+ *
+ * Fetches a list of file paths in paginated batches. Deduplicates paths before
+ * fetching and enforces a cumulative 3.5 MB budget — once the budget is
+ * exceeded mid-page the current file is excluded and hasMore is set so the
+ * caller can resume. Returns a pagination object with cursor, nextCursor,
+ * hasMore, total, and returned counts.
+ */
 describe("getMultipleFiles", () => {
   const paths = [
     "src/a.ts",
@@ -254,9 +265,14 @@ describe("getMultipleFiles", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listDirectory
-// ---------------------------------------------------------------------------
+/**
+ * listDirectory
+ *
+ * Lists the entries at a given repository path. Throws AppError when the path
+ * points to a file (GitHub returns a plain object rather than an array).
+ * An empty string path lists the repository root. Forwards an optional ref
+ * as a query parameter.
+ */
 describe("listDirectory", () => {
   /**
    * Happy path — GitHub returns an array of entries for a directory.
@@ -340,9 +356,15 @@ describe("listDirectory", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// upsertFile
-// ---------------------------------------------------------------------------
+/**
+ * upsertFile
+ *
+ * Creates or updates a file using the GitHub Contents PUT endpoint. Performs
+ * a GET first to determine whether the file exists and to obtain its SHA for
+ * updates. 404 on the GET indicates a new file (no sha in PUT body). Any
+ * other error from the GET is re-thrown. Returns created: true/false and
+ * the commit + file metadata from GitHub.
+ */
 describe("upsertFile", () => {
   const upsertInput = {
     path: "src/new-file.ts",
@@ -471,5 +493,290 @@ describe("upsertFile", () => {
     await expect(
       upsertFile("owner", "repo", upsertInput)
     ).rejects.toThrow("GitHub request forbidden");
+  });
+});
+
+/**
+ * deleteFile
+ *
+ * Deletes a file by first fetching its SHA (required by the GitHub Contents
+ * DELETE endpoint) then issuing the DELETE. Throws AppError when the path
+ * resolves to a directory rather than a file.
+ */
+describe("deleteFile", () => {
+  const deleteInput = {
+    path: "src/old-file.ts",
+    branch: "main",
+    message: "chore: remove old-file",
+  };
+
+  function makeDeleteResponse() {
+    return {
+      commit: {
+        sha: "del-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/del-commit-sha",
+        message: "chore: remove old-file",
+      },
+    };
+  }
+
+  /**
+   * Happy path — file exists; asserts two API calls are made (GET sha, then
+   * DELETE), deleted: true is returned, and the commit shape is correct.
+   */
+  it("returns deleted: true and commit detail when the file exists", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path)) // GET sha
+      .mockResolvedValueOnce(makeDeleteResponse()); // DELETE
+
+    const result = await deleteFile("owner", "repo", deleteInput);
+
+    expect(result.deleted).toBe(true);
+    expect(result.path).toBe(deleteInput.path);
+    expect(result.commit.sha).toBe("del-commit-sha");
+    expect(mockGithubRequest).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * SHA forwarded — the DELETE body must include the sha obtained from the
+   * GET call so GitHub can verify there are no concurrent modifications.
+   */
+  it("includes the file SHA in the DELETE body", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path))
+      .mockResolvedValueOnce(makeDeleteResponse());
+
+    await deleteFile("owner", "repo", deleteInput);
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    expect(body.sha).toBe("abc123"); // sha from makeGitHubFile
+  });
+
+  /**
+   * DELETE HTTP method — asserts the second call uses the DELETE method,
+   * not PUT or POST.
+   */
+  it("uses the DELETE HTTP method", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path))
+      .mockResolvedValueOnce(makeDeleteResponse());
+
+    await deleteFile("owner", "repo", deleteInput);
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    expect(options.method).toBe("DELETE");
+  });
+
+  /**
+   * Path is a directory — GitHub returns an object with type: "dir".
+   * Asserts AppError is thrown and no DELETE call is made.
+   */
+  it("throws AppError when the path resolves to a directory", async () => {
+    mockGithubRequest.mockResolvedValueOnce({
+      type: "dir",
+      name: "src",
+      path: "src",
+      sha: "abc",
+      size: 0,
+      encoding: "none",
+      content: "",
+    });
+
+    await expect(
+      deleteFile("owner", "repo", deleteInput)
+    ).rejects.toThrow("Path is not a file");
+
+    expect(mockGithubRequest).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * patchFile
+ *
+ * Applies a series of text-based patch operations (replace_once, replace_all,
+ * insert_before, insert_after) to an existing file's content, then writes the
+ * result back via a PUT. Throws AppError for binary files (null byte detected),
+ * and for replace_once when the find text is not present. Includes the file's
+ * existing SHA in the PUT body to guard against concurrent modifications.
+ */
+describe("patchFile", () => {
+  const patchInput = {
+    path: "src/config.ts",
+    branch: "main",
+    message: "fix: update config",
+    patches: [{ op: "replace_once" as const, find: "old text", replace: "new text" }],
+  };
+
+  function makePatchResponse() {
+    return {
+      content: {
+        name: "config.ts",
+        path: "src/config.ts",
+        sha: "patched-sha",
+        size: 50,
+      },
+      commit: {
+        sha: "patch-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/patch-commit-sha",
+        message: "fix: update config",
+      },
+    };
+  }
+
+  /**
+   * Happy path (replace_once) — file exists, patch text is found.
+   * Asserts patched: true is returned, patchesApplied matches the input
+   * count, and the PUT body contains the updated content base64-encoded.
+   */
+  it("returns patched: true and applies replace_once correctly", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("old text here", patchInput.path))
+      .mockResolvedValueOnce(makePatchResponse());
+
+    const result = await patchFile("owner", "repo", patchInput);
+
+    expect(result.patched).toBe(true);
+    expect(result.patchesApplied).toBe(1);
+    expect(result.path).toBe(patchInput.path);
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    const decoded = Buffer.from(body.content, "base64").toString("utf8");
+    expect(decoded).toBe("new text here");
+  });
+
+  /**
+   * replace_all op — all occurrences of the find text are replaced.
+   * Asserts the decoded PUT body has both instances replaced.
+   */
+  it("replaces all occurrences with replace_all op", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("foo foo foo", patchInput.path))
+      .mockResolvedValueOnce(makePatchResponse());
+
+    await patchFile("owner", "repo", {
+      ...patchInput,
+      patches: [{ op: "replace_all", find: "foo", replace: "bar" }],
+    });
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    const decoded = Buffer.from(body.content, "base64").toString("utf8");
+    expect(decoded).toBe("bar bar bar");
+  });
+
+  /**
+   * insert_before op — content is inserted immediately before the anchor.
+   * Asserts the decoded PUT body has the content prepended to the anchor.
+   */
+  it("inserts content before the anchor with insert_before op", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("anchor line", patchInput.path))
+      .mockResolvedValueOnce(makePatchResponse());
+
+    await patchFile("owner", "repo", {
+      ...patchInput,
+      patches: [{ op: "insert_before", anchor: "anchor line", content: "before\n" }],
+    });
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    const decoded = Buffer.from(body.content, "base64").toString("utf8");
+    expect(decoded).toBe("before\nanchor line");
+  });
+
+  /**
+   * insert_after op — content is appended immediately after the anchor.
+   */
+  it("inserts content after the anchor with insert_after op", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("anchor line", patchInput.path))
+      .mockResolvedValueOnce(makePatchResponse());
+
+    await patchFile("owner", "repo", {
+      ...patchInput,
+      patches: [{ op: "insert_after", anchor: "anchor line", content: "\nafter" }],
+    });
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    const decoded = Buffer.from(body.content, "base64").toString("utf8");
+    expect(decoded).toBe("anchor line\nafter");
+  });
+
+  /**
+   * find text not found (replace_once) — the patch text doesn't exist in
+   * the file. Asserts AppError is thrown with a descriptive message and
+   * no PUT call is made.
+   */
+  it("throws AppError when replace_once find text is not found", async () => {
+    mockGithubRequest.mockResolvedValueOnce(
+      makeGitHubFile("completely different content", patchInput.path)
+    );
+
+    await expect(
+      patchFile("owner", "repo", patchInput)
+    ).rejects.toThrow("replace_once");
+
+    expect(mockGithubRequest).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Binary file guard — decoded content contains a null byte.
+   * Asserts AppError is thrown refusing to patch binary content.
+   */
+  it("throws AppError when the file content contains a null byte (binary guard)", async () => {
+    const binaryContent = "text\0binary";
+    mockGithubRequest.mockResolvedValueOnce(
+      makeGitHubFile(binaryContent, patchInput.path)
+    );
+
+    await expect(
+      patchFile("owner", "repo", patchInput)
+    ).rejects.toThrow("binary file");
+
+    expect(mockGithubRequest).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * SHA forwarded — the PUT body must include the existing file's SHA so
+   * GitHub can detect concurrent modifications.
+   */
+  it("includes the existing file SHA in the PUT body", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("old text", patchInput.path))
+      .mockResolvedValueOnce(makePatchResponse());
+
+    await patchFile("owner", "repo", patchInput);
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    expect(body.sha).toBe("abc123"); // sha from makeGitHubFile
+  });
+
+  /**
+   * Multiple patches applied in order — two sequential replace_once ops.
+   * Asserts patchesApplied is 2 and both substitutions are in the PUT body.
+   */
+  it("applies multiple patches in sequence and returns correct patchesApplied count", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce(makeGitHubFile("aaa bbb", patchInput.path))
+      .mockResolvedValueOnce(makePatchResponse());
+
+    const result = await patchFile("owner", "repo", {
+      ...patchInput,
+      patches: [
+        { op: "replace_once", find: "aaa", replace: "AAA" },
+        { op: "replace_once", find: "bbb", replace: "BBB" },
+      ],
+    });
+
+    expect(result.patchesApplied).toBe(2);
+
+    const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
+    const body = JSON.parse(options.body);
+    const decoded = Buffer.from(body.content, "base64").toString("utf8");
+    expect(decoded).toBe("AAA BBB");
   });
 });

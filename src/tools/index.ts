@@ -3,12 +3,14 @@ import { addIssueCommentTool } from "./add-issue-comment";
 import { createBranchTool } from "./create-branch";
 import { createIssueTool } from "./create-issue";
 import { createPullRequestTool } from "./create-pull-request";
+import { deleteFileTool } from "./delete-file";
 import { getBranchTool } from "./get-branch";
 import { getCommitTool } from "./get-commit";
 import { getFileContentsTool } from "./get-file-contents";
 import { getIssueTool } from "./get-issue";
 import { getMultipleFilesTool } from "./get-multiple-files";
 import { getPullRequestDiffTool } from "./get-pull-request-diff";
+import { getPullRequestReviewsTool } from "./get-pull-request-reviews";
 import { getPullRequestTool } from "./get-pull-request";
 import { linkIssueToPullRequestTool } from "./link-issue-to-pull-request";
 import { listBranchesTool } from "./list-branches";
@@ -19,7 +21,9 @@ import { listIssuesTool } from "./list-issues";
 import { listOpenPullRequestsTool } from "./list-open-pull-requests";
 import { listPullRequestCommentsTool } from "./list-pull-request-comments";
 import { listPullRequestFilesTool } from "./list-pull-request-files";
+import { listPullRequestsTool } from "./list-pull-requests";
 import { listRepositoriesTool } from "./list-repositories";
+import { patchFileTool } from "./patch-file";
 import { searchCodeTool } from "./search-code";
 import { searchFilesTool } from "./search-files";
 import { updateIssueTool } from "./update-issue";
@@ -30,6 +34,7 @@ const tools = [
   listRepositoriesTool,
   listBranchesTool,
   listOpenPullRequestsTool,
+  listPullRequestsTool,
   createBranchTool,
   getFileContentsTool,
   getMultipleFilesTool,
@@ -37,8 +42,11 @@ const tools = [
   getPullRequestTool,
   listPullRequestFilesTool,
   listPullRequestCommentsTool,
+  getPullRequestReviewsTool,
   updatePullRequestTool,
   upsertFileTool,
+  patchFileTool,
+  deleteFileTool,
   createPullRequestTool,
   getPullRequestDiffTool,
   listIssuesTool,

@@ -48,9 +48,13 @@ function makeCommitSummary(sha: string) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// getCommit
-// ---------------------------------------------------------------------------
+/**
+ * getCommit
+ *
+ * Fetches a single commit by SHA or ref and maps the GitHub response to a
+ * flat structure. Handles absent stats, absent files, null author (unlinked
+ * GitHub account), and null patch (binary files).
+ */
 describe("getCommit", () => {
   /**
    * Happy path — returns all top-level fields including stats and files array.
@@ -125,9 +129,13 @@ describe("getCommit", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listCommits
-// ---------------------------------------------------------------------------
+/**
+ * listCommits
+ *
+ * Lists commits for a repository with optional branch, path, and perPage
+ * filters. Each filter is forwarded as a query parameter on the GitHub API
+ * URL. Handles unlinked GitHub accounts (null author_login).
+ */
 describe("listCommits", () => {
   /**
    * Default per_page — calling with no arguments.
