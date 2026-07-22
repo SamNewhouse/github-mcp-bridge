@@ -36,6 +36,13 @@ function makeIssue(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+/**
+ * listIssues
+ *
+ * Fetches issues for a repository, filtering out pull requests (which
+ * GitHub returns on the same /issues endpoint). Defaults to state=open
+ * and uses per_page=100. Labels and assignees are flattened to string arrays.
+ */
 describe("listIssues", () => {
   /**
    * PR filtering — GitHub's /issues endpoint returns both issues and PRs;
@@ -112,6 +119,13 @@ describe("listIssues", () => {
   });
 });
 
+/**
+ * getIssue
+ *
+ * Fetches a single issue by number. Throws if the number belongs to a pull
+ * request (GitHub returns PR data on the /issues/:number endpoint too).
+ * Returns the full issue including body, which listIssues omits.
+ */
 describe("getIssue", () => {
   /**
    * PR guard — GitHub returns issue-like data for PR numbers on the /issues
@@ -154,6 +168,14 @@ describe("getIssue", () => {
   });
 });
 
+/**
+ * updateIssue
+ *
+ * Sends a PATCH request to update one or more fields of an existing issue.
+ * Requires at least one field to be supplied; throws AppError otherwise.
+ * Only provided fields are included in the PATCH body to avoid accidentally
+ * clearing fields the caller didn't intend to change.
+ */
 describe("updateIssue", () => {
   /**
    * Empty payload guard — updateIssue checks that at least one field is
@@ -211,6 +233,14 @@ describe("updateIssue", () => {
   });
 });
 
+/**
+ * linkIssueToPullRequest
+ *
+ * Appends a closing keyword (closes/fixes/resolves) and issue number to a
+ * PR's body so GitHub auto-closes the issue on merge. The operation is
+ * idempotent — if the PR body already references the issue (case-insensitive)
+ * no PATCH is made and linked: false is returned.
+ */
 describe("linkIssueToPullRequest", () => {
   /**
    * Not yet linked — PR body doesn't contain any closing keyword for issue #5.
@@ -304,6 +334,12 @@ describe("linkIssueToPullRequest", () => {
   });
 });
 
+/**
+ * listIssueComments
+ *
+ * Fetches all comments on an issue using per_page=100. Maps each comment
+ * to a flat shape with author extracted from user.login.
+ */
 describe("listIssueComments", () => {
   /**
    * Return shape — verifies each comment has the expected mapped fields.
@@ -351,6 +387,12 @@ describe("listIssueComments", () => {
   });
 });
 
+/**
+ * addIssueComment
+ *
+ * Posts a new comment to an issue via the GitHub comments API.
+ * Returns the created comment with id, body, author, html_url, and timestamps.
+ */
 describe("addIssueComment", () => {
   /**
    * Happy path — asserts the correct POST body is sent and the returned
@@ -375,6 +417,13 @@ describe("addIssueComment", () => {
   });
 });
 
+/**
+ * createIssue
+ *
+ * Creates a new issue via POST. Only title is required; body defaults to
+ * empty string. Labels and assignees are included in the POST body only
+ * when provided. Returns the created issue including html_url.
+ */
 describe("createIssue", () => {
   /**
    * Minimal input — only title is required. Asserts body defaults to empty
