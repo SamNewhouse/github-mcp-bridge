@@ -3,8 +3,21 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      # Fixture and temp files never affect production behaviour — skip CI
+      - 'tests/fixtures/**'
+      - '**/*.tmp'
+      - '**/*.temp'
+      - '**/tmp/**'
+      - '**/temp/**'
   push:
     branches: [main]
+    paths-ignore:
+      - 'tests/fixtures/**'
+      - '**/*.tmp'
+      - '**/*.temp'
+      - '**/tmp/**'
+      - '**/temp/**'
 
 jobs:
   typecheck:
@@ -27,6 +40,14 @@ jobs:
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
+    # Unit tests MUST NOT reach the network. Any test that tries a real fetch
+    # will fail immediately because no PAT/server is available — this is the
+    # intended safeguard.
+    env:
+      # Explicitly absent: GITHUB_PAT, CONNECTOR_SECRET, PORT
+      # If any unit test imports githubRequest without mocking it, the missing
+      # PAT will throw at config-load time, failing fast.
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
 
@@ -42,8 +63,14 @@ jobs:
         run: npm run test:unit
 
   integration:
-    name: Integration tests
+    name: Integration tests (read-only)
     runs-on: ubuntu-latest
+    # WRITE-SAFETY CONTRACT:
+    # This job connects to a live GitHub PAT. All tests in
+    # tests/integration/tools.integration.ts MUST be read-only.
+    # Mutation tools (create, upsert, patch, delete, update, add, link)
+    # are covered exclusively by mocked unit tests in tests/unit/.
+    # Never add a live mutation call to this job.
     env:
       GITHUB_PAT: ${{ secrets.GH_PAT }}
       CONNECTOR_SECRET: ${{ secrets.CONNECTOR_SECRET }}
