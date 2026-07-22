@@ -13,10 +13,23 @@ type GithubRequestOptions = RequestInit & {
   owner?: string;
 };
 
-function mapGithubStatus(status: number, body: string): AppError {
+/**
+ * Maps a GitHub HTTP error status to an AppError.
+ * patKey is the env var name that was used (e.g. "GITHUB_PAT_DR_DOG_GAMES"
+ * or "GITHUB_PAT") so that 401 errors tell the operator exactly which
+ * credential to check rather than the generic "check your PAT".
+ */
+function mapGithubStatus(
+  status: number,
+  body: string,
+  patKey: string,
+): AppError {
   switch (status) {
     case 401:
-      return new AppError("GitHub authentication failed — check your PAT", 401);
+      return new AppError(
+        `GitHub authentication failed — check ${patKey}`,
+        401,
+      );
     case 403: {
       // Rate limit exhausted vs plain forbidden
       if (body.includes("rate limit") || body.includes("API rate limit")) {
@@ -56,6 +69,7 @@ export async function githubRequest<T>(
   const headers = new Headers(init.headers);
   const responseType = init.responseType ?? "json";
   const owner = init.owner ?? "";
+  const { pat, key: patKey } = getGithubPatForOwner(owner);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -63,7 +77,7 @@ export async function githubRequest<T>(
     headers.set("Accept", "application/vnd.github+json");
   }
 
-  headers.set("Authorization", `Bearer ${getGithubPatForOwner(owner)}`);
+  headers.set("Authorization", `Bearer ${pat}`);
   headers.set("User-Agent", "github-mcp-bridge");
   headers.set("X-GitHub-Api-Version", GITHUB_API_VERSION);
 
@@ -76,6 +90,7 @@ export async function githubRequest<T>(
     path,
     hasBody: Boolean(init.body),
     responseType,
+    patKey,
     headers: {
       accept: headers.get("Accept"),
       authorization: headers.get("Authorization") ? "[present]" : "[missing]",
@@ -117,10 +132,11 @@ export async function githubRequest<T>(
         status: response.status,
         statusText: response.statusText,
         durationMs,
+        patKey,
         responseBody: text || null,
       });
 
-      throw mapGithubStatus(response.status, text);
+      throw mapGithubStatus(response.status, text, patKey);
     }
 
     // Guard response size before reading into memory
