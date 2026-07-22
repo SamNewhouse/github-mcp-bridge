@@ -58,7 +58,7 @@ export function validateGithubPats(): void {
  *   1. GITHUB_PAT_<OWNER> — owner-specific PAT. The owner name is uppercased
  *      and hyphens are replaced with underscores to produce a valid env var name.
  *      e.g. owner "SamNewhouse"  → GITHUB_PAT_SAMNEWHOUSE
- *           owner "Dr-Dog-Games" → GITHUB_PAT_DR_DOG_GAMES
+ *           owner "Kelvast"      → GITHUB_PAT_KELVAST
  *           owner "my-org"       → GITHUB_PAT_MY_ORG
  *   2. GITHUB_PAT — the default fallback PAT used when no owner-specific
  *      variable is set.
