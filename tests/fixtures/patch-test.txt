@@ -1,1 +1,1 @@
-qux bar qux baz qux
+ANCHOR_TEXT end
