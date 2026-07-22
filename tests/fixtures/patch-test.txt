@@ -1,1 +1,1 @@
-hello world hello
+ANCHOR_TEXT end
