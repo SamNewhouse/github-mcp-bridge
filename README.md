@@ -12,7 +12,7 @@ MCP Client  ──bearer token──▶  github-mcp-bridge  ──GitHub PAT─�
 
 1. The client sends a JSON-RPC 2.0 `tools/call` request to the bridge with a bearer token
 2. The bridge validates the token against `CONNECTOR_SECRET` (timing-safe, with rate limiting)
-3. The bridge calls the GitHub API using the correct PAT for the owner and returns the result
+3. The bridge selects the correct PAT for the request owner (with fallback to the default) and calls the GitHub API
 
 The bridge also exposes `tools/list` so any client can discover all available tools and their input schemas at runtime — no manual tool configuration needed.
 
@@ -115,7 +115,7 @@ The server starts on `http://localhost:3000` by default (configurable via `PORT`
 | Variable           | Required | Description                                                                                                                                                                       |
 | ------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GITHUB_PAT`              | ✅       | Default GitHub PAT — used for any owner that has no dedicated entry                                                                                                               |
-| `GITHUB_PAT_<owner>`      | ✗        | Owner-specific PAT. The suffix must exactly match the GitHub username or org name (e.g. `GITHUB_PAT_my-org`). Add as many as you need — all `GITHUB_PAT_*` keys are resolved automatically at request time. Falls back to `GITHUB_PAT` if no match is found. |
+| `GITHUB_PAT_<OWNER>`      | ✗        | Owner-specific PAT. The owner name is **uppercased** and **hyphens replaced with underscores** to form the key — e.g. `Dr-Dog-Games` → `GITHUB_PAT_DR_DOG_GAMES`, `my-org` → `GITHUB_PAT_MY_ORG`. Add as many as you need. Falls back to `GITHUB_PAT` if no match is found. |
 | `CONNECTOR_SECRET`        | ✅       | Shared secret used to authenticate requests to the bridge. Minimum 32 characters — generate with `openssl rand -hex 32`. Supports comma-separated list for zero-downtime rotation |
 | `PORT`                    | ✗        | HTTP port (default: `3000`)                                                                                                                                                       |
 
