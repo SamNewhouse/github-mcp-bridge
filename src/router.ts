@@ -76,6 +76,13 @@ function sendSplashPage(res: http.ServerResponse): void {
   const html = getSplashHtml(getToolList().length);
   res.statusCode = 200;
   res.setHeader("content-type", "text/html; charset=utf-8");
+  res.setHeader(
+    "content-security-policy",
+    "default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; script-src 'none'",
+  );
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("x-frame-options", "DENY");
+  res.setHeader("referrer-policy", "no-referrer");
   res.end(html);
 }
 
