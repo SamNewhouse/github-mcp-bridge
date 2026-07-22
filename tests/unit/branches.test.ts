@@ -11,9 +11,6 @@ beforeEach(() => {
   mock.mockReset();
 });
 
-// ---------------------------------------------------------------------------
-// listBranches
-// ---------------------------------------------------------------------------
 describe("listBranches", () => {
   /**
    * Return shape — verifies each branch is mapped to name, sha, and protected.
@@ -58,9 +55,6 @@ describe("listBranches", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// createBranch
-// ---------------------------------------------------------------------------
 describe("createBranch", () => {
   /**
    * Happy path — base branch exists; asserts the new branch name and
@@ -97,9 +91,6 @@ describe("createBranch", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getBranch
-// ---------------------------------------------------------------------------
 describe("getBranch", () => {
   /**
    * Happy path — returns structured detail including latest_commit.
