@@ -1,11 +1,3 @@
-/**
- * Unit tests for src/github/branches.ts
- *
- * Covers the three exported functions: listBranches, createBranch, and getBranch.
- * githubRequest is mocked for every test so no real HTTP calls are made.
- * Each suite validates field mapping, URL construction, and edge-case handling.
- */
-
 jest.mock("../../src/github/client", () => ({
   githubRequest: jest.fn(),
 }));
