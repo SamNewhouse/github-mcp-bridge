@@ -43,6 +43,7 @@ export async function searchCode(owner: string, repo: string, query: string) {
       headers: {
         Accept: "application/vnd.github.text-match+json",
       },
+      owner,
     },
   );
 
@@ -69,6 +70,7 @@ export async function searchFiles(
   const branch = ref ?? "HEAD";
   const result = await githubRequest<GitHubTreeResult>(
     `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+    { owner },
   );
 
   const lowerPattern = pattern.toLowerCase();

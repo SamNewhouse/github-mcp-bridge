@@ -47,6 +47,7 @@ type GitHubCommitSummary = {
 export async function getCommit(owner: string, repo: string, ref: string) {
   const commit = await githubRequest<GitHubCommitDetail>(
     `/repos/${owner}/${repo}/commits/${ref}`,
+    { owner },
   );
 
   return {
@@ -83,6 +84,7 @@ export async function listCommits(
 
   const commits = await githubRequest<GitHubCommitSummary[]>(
     `/repos/${owner}/${repo}/commits?${params.toString()}`,
+    { owner },
   );
 
   return commits.map((c) => ({

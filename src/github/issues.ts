@@ -56,6 +56,7 @@ export async function listIssues(
 ) {
   const issues = await githubRequest<GitHubIssue[]>(
     `/repos/${owner}/${repo}/issues?state=${state}&per_page=100`,
+    { owner },
   );
 
   return issues
@@ -81,6 +82,7 @@ export async function getIssue(
 ) {
   const issue = await githubRequest<GitHubIssue>(
     `/repos/${owner}/${repo}/issues/${issueNumber}`,
+    { owner },
   );
 
   if (issue.pull_request) {
@@ -118,6 +120,7 @@ export async function createIssue(
         ...(input.labels ? { labels: input.labels } : {}),
         ...(input.assignees ? { assignees: input.assignees } : {}),
       }),
+      owner,
     },
   );
 
@@ -159,6 +162,7 @@ export async function updateIssue(
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      owner,
     },
   );
 
@@ -185,6 +189,7 @@ export async function linkIssueToPullRequest(
 ) {
   const pr = await githubRequest<{ body: string | null; number: number }>(
     `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    { owner },
   );
 
   const linkText = `\n\n${keyword} #${issueNumber}`;
@@ -208,6 +213,7 @@ export async function linkIssueToPullRequest(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ body: currentBody + linkText }),
+    owner,
   });
 
   return {
@@ -225,6 +231,7 @@ export async function listIssueComments(
 ) {
   const comments = await githubRequest<GitHubIssueComment[]>(
     `/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100`,
+    { owner },
   );
 
   return comments.map((c) => ({
@@ -249,6 +256,7 @@ export async function addIssueComment(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body }),
+      owner,
     },
   );
 

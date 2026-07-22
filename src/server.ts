@@ -1,7 +1,9 @@
 import "dotenv/config";
 import * as http from "node:http";
-import { getPort } from "./config";
+import { getPort, validateGithubPats } from "./config";
 import { handleMcpRequest } from "./router";
+
+validateGithubPats();
 
 const server = http.createServer(handleMcpRequest);
 const port = getPort();
