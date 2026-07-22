@@ -136,7 +136,7 @@ describe("getIssue", () => {
     mock.mockResolvedValueOnce(makeIssue({ pull_request: { url: "..." } }));
 
     await expect(getIssue("owner", "repo", 1)).rejects.toThrow(
-      "Requested number is a pull request, not an issue"
+      "Requested number is a pull request, not an issue",
     );
   });
 
@@ -184,7 +184,7 @@ describe("updateIssue", () => {
    */
   it("throws AppError when no update fields are provided", async () => {
     await expect(updateIssue("owner", "repo", 1, {})).rejects.toThrow(
-      "No update fields provided"
+      "No update fields provided",
     );
     expect(mock).not.toHaveBeenCalled();
   });
@@ -470,6 +470,9 @@ describe("createIssue", () => {
 
     const result = await createIssue("owner", "repo", { title: "Bug" });
 
-    expect(result).toHaveProperty("html_url", "https://github.com/owner/repo/issues/1");
+    expect(result).toHaveProperty(
+      "html_url",
+      "https://github.com/owner/repo/issues/1",
+    );
   });
 });

@@ -91,9 +91,7 @@ export function recordAuthSuccess(ip: string): void {
  * Returns the IP address from an incoming request.
  * Prefers X-Forwarded-For (set by Vercel/proxies) over socket.remoteAddress.
  */
-export function getClientIp(
-  req: import("node:http").IncomingMessage,
-): string {
+export function getClientIp(req: import("node:http").IncomingMessage): string {
   const forwarded = req.headers["x-forwarded-for"];
 
   if (typeof forwarded === "string" && forwarded.trim()) {

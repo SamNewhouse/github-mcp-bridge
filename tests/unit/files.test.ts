@@ -33,7 +33,7 @@ function makeGitHubFile(content: string, path = "src/example.ts") {
 
 function makeDirectoryEntry(
   name: string,
-  type: "file" | "dir" | "symlink" | "submodule" = "file"
+  type: "file" | "dir" | "symlink" | "submodule" = "file",
 ) {
   return {
     type,
@@ -109,9 +109,9 @@ describe("getFileContents", () => {
       content: "",
     });
 
-    await expect(
-      getFileContents("owner", "repo", "src")
-    ).rejects.toThrow("Path is not a file: src");
+    await expect(getFileContents("owner", "repo", "src")).rejects.toThrow(
+      "Path is not a file: src",
+    );
   });
 
   /**
@@ -170,7 +170,7 @@ describe("getMultipleFiles", () => {
   function mockFiles(count: number, content = "export default {};\n") {
     for (let i = 0; i < count; i++) {
       mockGithubRequest.mockResolvedValueOnce(
-        makeGitHubFile(content, paths[i]!)
+        makeGitHubFile(content, paths[i]!),
       );
     }
   }
@@ -201,7 +201,13 @@ describe("getMultipleFiles", () => {
   it("returns remaining 2 files when cursor: 10 on a 12-file list", async () => {
     mockFiles(2);
 
-    const result = await getMultipleFiles("owner", "repo", paths, undefined, 10);
+    const result = await getMultipleFiles(
+      "owner",
+      "repo",
+      paths,
+      undefined,
+      10,
+    );
 
     expect(result.files).toHaveLength(2);
     expect(result.pagination.hasMore).toBe(false);
@@ -232,7 +238,13 @@ describe("getMultipleFiles", () => {
    * Asserts 0 files are returned, hasMore is false, and no API call is made.
    */
   it("returns 0 files and hasMore: false when cursor equals total", async () => {
-    const result = await getMultipleFiles("owner", "repo", ["src/a.ts"], undefined, 1);
+    const result = await getMultipleFiles(
+      "owner",
+      "repo",
+      ["src/a.ts"],
+      undefined,
+      1,
+    );
 
     expect(result.files).toHaveLength(0);
     expect(result.pagination.hasMore).toBe(false);
@@ -306,11 +318,11 @@ describe("listDirectory", () => {
   it("throws AppError when the path is a file not a directory", async () => {
     // GitHub returns a single object for files, not an array
     mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile("content", "src/index.ts")
+      makeGitHubFile("content", "src/index.ts"),
     );
 
     await expect(
-      listDirectory("owner", "repo", "src/index.ts")
+      listDirectory("owner", "repo", "src/index.ts"),
     ).rejects.toThrow("Path is not a directory");
   });
 
@@ -487,12 +499,12 @@ describe("upsertFile", () => {
    */
   it("rethrows non-404 errors from the existence check", async () => {
     mockGithubRequest.mockRejectedValueOnce(
-      new AppError("GitHub request forbidden", 403)
+      new AppError("GitHub request forbidden", 403),
     );
 
-    await expect(
-      upsertFile("owner", "repo", upsertInput)
-    ).rejects.toThrow("GitHub request forbidden");
+    await expect(upsertFile("owner", "repo", upsertInput)).rejects.toThrow(
+      "GitHub request forbidden",
+    );
   });
 });
 
@@ -583,9 +595,9 @@ describe("deleteFile", () => {
       content: "",
     });
 
-    await expect(
-      deleteFile("owner", "repo", deleteInput)
-    ).rejects.toThrow("Path is not a file");
+    await expect(deleteFile("owner", "repo", deleteInput)).rejects.toThrow(
+      "Path is not a file",
+    );
 
     expect(mockGithubRequest).toHaveBeenCalledTimes(1);
   });
@@ -605,7 +617,9 @@ describe("patchFile", () => {
     path: "src/config.ts",
     branch: "main",
     message: "fix: update config",
-    patches: [{ op: "replace_once" as const, find: "old text", replace: "new text" }],
+    patches: [
+      { op: "replace_once" as const, find: "old text", replace: "new text" },
+    ],
   };
 
   function makePatchResponse() {
@@ -677,7 +691,9 @@ describe("patchFile", () => {
 
     await patchFile("owner", "repo", {
       ...patchInput,
-      patches: [{ op: "insert_before", anchor: "anchor line", content: "before\n" }],
+      patches: [
+        { op: "insert_before", anchor: "anchor line", content: "before\n" },
+      ],
     });
 
     const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
@@ -696,7 +712,9 @@ describe("patchFile", () => {
 
     await patchFile("owner", "repo", {
       ...patchInput,
-      patches: [{ op: "insert_after", anchor: "anchor line", content: "\nafter" }],
+      patches: [
+        { op: "insert_after", anchor: "anchor line", content: "\nafter" },
+      ],
     });
 
     const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
@@ -712,12 +730,12 @@ describe("patchFile", () => {
    */
   it("throws AppError when replace_once find text is not found", async () => {
     mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile("completely different content", patchInput.path)
+      makeGitHubFile("completely different content", patchInput.path),
     );
 
-    await expect(
-      patchFile("owner", "repo", patchInput)
-    ).rejects.toThrow("replace_once");
+    await expect(patchFile("owner", "repo", patchInput)).rejects.toThrow(
+      "replace_once",
+    );
 
     expect(mockGithubRequest).toHaveBeenCalledTimes(1);
   });
@@ -729,12 +747,12 @@ describe("patchFile", () => {
   it("throws AppError when the file content contains a null byte (binary guard)", async () => {
     const binaryContent = "text\0binary";
     mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile(binaryContent, patchInput.path)
+      makeGitHubFile(binaryContent, patchInput.path),
     );
 
-    await expect(
-      patchFile("owner", "repo", patchInput)
-    ).rejects.toThrow("binary file");
+    await expect(patchFile("owner", "repo", patchInput)).rejects.toThrow(
+      "binary file",
+    );
 
     expect(mockGithubRequest).toHaveBeenCalledTimes(1);
   });

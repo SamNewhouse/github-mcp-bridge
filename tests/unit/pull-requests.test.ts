@@ -162,7 +162,10 @@ describe("listPullRequests", () => {
    * Asserts draft is present in each mapped PR.
    */
   it("includes draft field in each mapped PR", async () => {
-    mock.mockResolvedValueOnce([makePR({ draft: false }), makePR({ draft: true, number: 11 })]);
+    mock.mockResolvedValueOnce([
+      makePR({ draft: false }),
+      makePR({ draft: true, number: 11 }),
+    ]);
 
     const result = await listPullRequests("owner", "repo", "all");
 
@@ -285,7 +288,8 @@ describe("getPullRequestDiff", () => {
    * is the string returned by the GitHub diff endpoint.
    */
   it("returns pullNumber and diff string", async () => {
-    const rawDiff = "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new";
+    const rawDiff =
+      "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new";
     mock.mockResolvedValueOnce(rawDiff);
 
     const result = await getPullRequestDiff("owner", "repo", 10);
@@ -549,7 +553,7 @@ describe("updatePullRequest", () => {
    */
   it("throws AppError when no update fields are provided", async () => {
     await expect(updatePullRequest("owner", "repo", 10, {})).rejects.toThrow(
-      "No update fields provided"
+      "No update fields provided",
     );
     expect(mock).not.toHaveBeenCalled();
   });
@@ -716,7 +720,7 @@ describe("listPullRequestFiles", () => {
    */
   it("returns truncated: true when exactly 100 files are returned", async () => {
     mock.mockResolvedValueOnce(
-      Array.from({ length: 100 }, (_, i) => makeFile(`file-${i}.ts`))
+      Array.from({ length: 100 }, (_, i) => makeFile(`file-${i}.ts`)),
     );
 
     const result = await listPullRequestFiles("owner", "repo", 10);

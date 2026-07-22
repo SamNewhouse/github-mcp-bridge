@@ -3,7 +3,11 @@ jest.mock("../../src/github/client", () => ({
 }));
 
 import { githubRequest } from "../../src/github/client";
-import { listBranches, createBranch, getBranch } from "../../src/github/branches";
+import {
+  listBranches,
+  createBranch,
+  getBranch,
+} from "../../src/github/branches";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
 
@@ -33,7 +37,11 @@ describe("listBranches", () => {
 
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual({ name: "main", sha: "abc123", protected: true });
-    expect(result[1]).toEqual({ name: "feat/foo", sha: "def456", protected: false });
+    expect(result[1]).toEqual({
+      name: "feat/foo",
+      sha: "def456",
+      protected: false,
+    });
   });
 
   /**
@@ -77,7 +85,11 @@ describe("createBranch", () => {
    */
   it("returns the new branch name and SHA from the base branch", async () => {
     mock
-      .mockResolvedValueOnce({ name: "main", commit: { sha: "abc123" }, protected: false })
+      .mockResolvedValueOnce({
+        name: "main",
+        commit: { sha: "abc123" },
+        protected: false,
+      })
       .mockResolvedValueOnce({});
 
     const result = await createBranch("owner", "repo", "main", "feat/new");
@@ -93,7 +105,11 @@ describe("createBranch", () => {
    */
   it("sends refs/heads/<name> format in the POST body", async () => {
     mock
-      .mockResolvedValueOnce({ name: "main", commit: { sha: "sha1" }, protected: false })
+      .mockResolvedValueOnce({
+        name: "main",
+        commit: { sha: "sha1" },
+        protected: false,
+      })
       .mockResolvedValueOnce({});
 
     await createBranch("owner", "repo", "main", "feat/my-feature");

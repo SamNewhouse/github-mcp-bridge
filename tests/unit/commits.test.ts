@@ -17,7 +17,11 @@ function makeCommitDetail(overrides: Partial<Record<string, unknown>> = {}) {
     html_url: "https://github.com/commit/deadbeef",
     commit: {
       message: "fix: correct bug",
-      author: { name: "Alice", email: "alice@example.com", date: "2026-01-01T00:00:00Z" },
+      author: {
+        name: "Alice",
+        email: "alice@example.com",
+        date: "2026-01-01T00:00:00Z",
+      },
       committer: { name: "Alice", date: "2026-01-01T00:00:00Z" },
     },
     author: { login: "alice" },
@@ -194,9 +198,7 @@ describe("listCommits", () => {
    * Asserts author_login is null rather than throwing on missing .login.
    */
   it("returns author_login: null for commits without a linked GitHub account", async () => {
-    mock.mockResolvedValueOnce([
-      { ...makeCommitSummary("abc"), author: null },
-    ]);
+    mock.mockResolvedValueOnce([{ ...makeCommitSummary("abc"), author: null }]);
 
     const [commit] = await listCommits("owner", "repo");
 

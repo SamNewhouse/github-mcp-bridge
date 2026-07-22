@@ -175,9 +175,7 @@ export const patchFileInputSchema = repositoryInputSchema.extend({
   path: z.string().min(1, "path is required"),
   branch: z.string().min(1, "branch is required"),
   message: z.string().min(1, "message is required"),
-  patches: z
-    .array(patchOpSchema)
-    .min(1, "at least one patch is required"),
+  patches: z.array(patchOpSchema).min(1, "at least one patch is required"),
 });
 
 // New: list_pull_requests
