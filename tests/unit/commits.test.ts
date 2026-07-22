@@ -48,9 +48,6 @@ function makeCommitSummary(sha: string) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// getCommit
-// ---------------------------------------------------------------------------
 describe("getCommit", () => {
   /**
    * Happy path — returns all top-level fields including stats and files array.
@@ -125,9 +122,6 @@ describe("getCommit", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listCommits
-// ---------------------------------------------------------------------------
 describe("listCommits", () => {
   /**
    * Default per_page — calling with no arguments.
