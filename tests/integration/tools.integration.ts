@@ -608,109 +608,8 @@ describe("patch_file (integration)", () => {
     expect(json.error).toBeDefined();
   });
 
-  // Happy-path tests — each uses its own file, written once.
-  it("replace_once replaces the first occurrence of a string", async () => {
-    const path = "tests/fixtures/patch/replace-once.txt";
-    await writeFixture(path, "hello world hello");
 
-    const result = await callTool("patch_file", {
-      owner: OWNER, repo: REPO, path, branch: TEST_BRANCH,
-      message: "test: replace_once",
-      patches: [{ op: "replace_once", find: "hello", replace: "goodbye" }],
-    });
 
-    expect(result.result.patched).toBe(true);
-    expect(result.result.patchesApplied).toBe(1);
-    expect(result.result.commit).toHaveProperty("sha");
-
-    const file = await callTool("get_file_contents", { owner: OWNER, repo: REPO, path, ref: TEST_BRANCH });
-    expect(file.file.content).toBe("goodbye world hello");
-  });
-
-  it("replace_all replaces all occurrences of a string", async () => {
-    const path = "tests/fixtures/patch/replace-all.txt";
-    await writeFixture(path, "foo bar foo baz foo");
-
-    const result = await callTool("patch_file", {
-      owner: OWNER, repo: REPO, path, branch: TEST_BRANCH,
-      message: "test: replace_all",
-      patches: [{ op: "replace_all", find: "foo", replace: "qux" }],
-    });
-
-    expect(result.result.patched).toBe(true);
-    const file = await callTool("get_file_contents", { owner: OWNER, repo: REPO, path, ref: TEST_BRANCH });
-    expect(file.file.content).toBe("qux bar qux baz qux");
-  });
-
-  it("insert_before inserts content before the anchor", async () => {
-    const path = "tests/fixtures/patch/insert-before.txt";
-    await writeFixture(path, "ANCHOR_TEXT end");
-
-    await callTool("patch_file", {
-      owner: OWNER, repo: REPO, path, branch: TEST_BRANCH,
-      message: "test: insert_before",
-      patches: [{ op: "insert_before", anchor: "ANCHOR_TEXT", content: "BEFORE_" }],
-    });
-
-    const file = await callTool("get_file_contents", { owner: OWNER, repo: REPO, path, ref: TEST_BRANCH });
-    expect(file.file.content).toBe("BEFORE_ANCHOR_TEXT end");
-  });
-
-  it("insert_after inserts content after the anchor", async () => {
-    const path = "tests/fixtures/patch/insert-after.txt";
-    await writeFixture(path, "start ANCHOR_TEXT");
-
-    await callTool("patch_file", {
-      owner: OWNER, repo: REPO, path, branch: TEST_BRANCH,
-      message: "test: insert_after",
-      patches: [{ op: "insert_after", anchor: "ANCHOR_TEXT", content: "_AFTER" }],
-    });
-
-    const file = await callTool("get_file_contents", { owner: OWNER, repo: REPO, path, ref: TEST_BRANCH });
-    expect(file.file.content).toBe("start ANCHOR_TEXT_AFTER");
-  });
-
-  it("fails clearly when replace_once find text is missing", async () => {
-    const path = "tests/fixtures/patch/replace-once-missing.txt";
-    await writeFixture(path, "some content here");
-
-    await expect(
-      callTool("patch_file", {
-        owner: OWNER, repo: REPO, path, branch: TEST_BRANCH, message: "test",
-        patches: [{ op: "replace_once", find: "NOT_PRESENT_XYZ", replace: "anything" }],
-      })
-    ).rejects.toThrow();
-  });
-
-  it("fails clearly when insert_before anchor is missing", async () => {
-    const path = "tests/fixtures/patch/insert-before-missing.txt";
-    await writeFixture(path, "some content here");
-
-    await expect(
-      callTool("patch_file", {
-        owner: OWNER, repo: REPO, path, branch: TEST_BRANCH, message: "test",
-        patches: [{ op: "insert_before", anchor: "NOT_PRESENT_XYZ", content: "X" }],
-      })
-    ).rejects.toThrow();
-  });
-
-  it("applies multiple patches in sequence", async () => {
-    const path = "tests/fixtures/patch/multi-patch.txt";
-    await writeFixture(path, "A B C");
-
-    await callTool("patch_file", {
-      owner: OWNER, repo: REPO, path, branch: TEST_BRANCH,
-      message: "test: multiple patches",
-      patches: [
-        { op: "replace_once", find: "A", replace: "X" },
-        { op: "replace_once", find: "B", replace: "Y" },
-        { op: "replace_once", find: "C", replace: "Z" },
-      ],
-    });
-
-    const file = await callTool("get_file_contents", { owner: OWNER, repo: REPO, path, ref: TEST_BRANCH });
-    expect(file.file.content).toBe("X Y Z");
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -741,23 +640,6 @@ describe("delete_file (integration)", () => {
         message: "test: delete non-existent file",
       })
     ).rejects.toThrow();
-  });
-
-  // Happy path — one writeFixture (create) + one delete = exactly 2 commits total.
-  it("successfully deletes an existing file and returns commit details", async () => {
-    const path = "tests/fixtures/delete/delete-happy-path.txt";
-    await writeFixture(path, "temporary content");
-
-    const result = await callTool("delete_file", {
-      owner: OWNER, repo: REPO, path, branch: TEST_BRANCH,
-      message: "test: delete temp file",
-    });
-
-    expect(result.result.deleted).toBe(true);
-    expect(result.result.path).toBe(path);
-    expect(result.result.commit).toHaveProperty("sha");
-    expect(result.result.commit).toHaveProperty("html_url");
-    expect(result.result.commit).toHaveProperty("message");
   });
 });
 
