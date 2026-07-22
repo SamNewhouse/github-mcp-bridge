@@ -1,15 +1,3 @@
-/**
- * Unit tests for src/github/commits.ts
- *
- * Covers getCommit and listCommits. githubRequest is mocked so no real HTTP
- * calls are made. Tests validate field mapping, null/missing-field handling,
- * and URL query-parameter construction.
- *
- * Two fixture factories are defined at the top of the file:
- *   makeCommitDetail  — full single-commit response shape (used by getCommit)
- *   makeCommitSummary — list-item response shape (used by listCommits)
- */
-
 jest.mock("../../src/github/client", () => ({
   githubRequest: jest.fn(),
 }));
