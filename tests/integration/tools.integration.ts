@@ -548,7 +548,11 @@ describe("search_code (integration)", () => {
   });
 
   it("returns total_count: 0 and empty items for a query with no matches", async () => {
-    const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: "zzq9_x7m2_k4w8_never_in_repo" });
+    // The query string must never appear literally in any source file —
+    // including this test file itself. We build it at runtime from parts
+    // so it is never present as a literal string in the codebase.
+    const noMatchQuery = ["xQ9", "zW2", "mK7"].join("__nomatch__");
+    const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: noMatchQuery });
     expect(result.results.total_count).toBe(0);
     expect(result.results.items).toHaveLength(0);
   });
