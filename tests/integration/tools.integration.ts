@@ -436,7 +436,13 @@ describe("search_code (integration)", () => {
   });
 
   it("returns total_count: 0 and empty items for a query with no matches", async () => {
-    const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: "xyzzy_guaranteed_no_match_token_42" });
+    const noMatchQuery = ["zzq9", "x7m2", "k4w8"].join("_never_in_repo_");
+    const result = await callTool("search_code", {
+      owner: OWNER,
+      repo: REPO,
+      query: noMatchQuery,
+    });
+
     expect(result.results.total_count).toBe(0);
     expect(result.results.items).toHaveLength(0);
   });
@@ -447,7 +453,13 @@ describe("search_code (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("search_files (integration)", () => {
   it("returns matching files for a known path pattern", async () => {
-    const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: ".integration", ref: "feat/pagination" });
+    const result = await callTool("search_files", {
+      owner: OWNER,
+      repo: REPO,
+      pattern: ".integration",
+      ref: "main",
+    });
+
     expect(result.results.total_matched).toBeGreaterThan(0);
     expect(Array.isArray(result.results.files)).toBe(true);
     for (const file of result.results.files) {
