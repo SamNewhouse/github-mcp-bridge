@@ -419,6 +419,33 @@ describe("create_issue (integration — validation)", () => {
 });
 
 /**
+ * add_issue_comment (integration — validation only)
+ *
+ * Does NOT post real comments. Verifies the input validation layer only:
+ * missing required fields must be rejected before any GitHub API call is made.
+ * Posting a real comment on every CI run would accumulate noise on PR #1.
+ */
+describe("add_issue_comment (integration — validation)", () => {
+  it("rejects request with missing body field", async () => {
+    const json = await callToolRaw("add_issue_comment", {
+      owner: OWNER,
+      repo: REPO,
+      issueNumber: KNOWN_PR_NUMBER,
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  it("rejects request with missing issueNumber field", async () => {
+    const json = await callToolRaw("add_issue_comment", {
+      owner: OWNER,
+      repo: REPO,
+      body: "should not be posted",
+    });
+    expect(json.error).toBeDefined();
+  });
+});
+
+/**
  * list_issue_comments (integration)
  *
  * Verifies the tool returns a comments array for a known issue/PR number,
@@ -577,7 +604,10 @@ describe("search_files (integration)", () => {
   });
 
   it("returns empty result for a pattern that matches nothing", async () => {
-    const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: "xyzzy_no_match_guaranteed" });
+    // Build the pattern at runtime so it never exists as a literal in the
+    // codebase and cannot be indexed and self-matched by search_files.
+    const noMatchPattern = ["xQ9", "zW2", "mK7"].join("__nomatch__");
+    const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: noMatchPattern });
     expect(result.results.total_matched).toBe(0);
     expect(result.results.files).toHaveLength(0);
   });
