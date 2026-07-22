@@ -97,6 +97,7 @@ function mapPullRequest(pr: GitHubPullRequest) {
 export async function listOpenPullRequests(owner: string, repo: string) {
   const prs = await githubRequest<GitHubPullRequest[]>(
     `/repos/${owner}/${repo}/pulls?state=open&per_page=100`,
+    { owner },
   );
 
   return prs.map((pr) => ({
@@ -119,6 +120,7 @@ export async function listPullRequests(
 ) {
   const prs = await githubRequest<GitHubPullRequest[]>(
     `/repos/${owner}/${repo}/pulls?state=${encodeURIComponent(state)}&per_page=100`,
+    { owner },
   );
 
   return prs.map((pr) => ({
@@ -142,6 +144,7 @@ export async function getPullRequest(
 ) {
   const pr = await githubRequest<GitHubPullRequest>(
     `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    { owner },
   );
 
   return mapPullRequest(pr);
@@ -154,6 +157,7 @@ export async function listPullRequestFiles(
 ) {
   const files = await githubRequest<GitHubPullRequestFile[]>(
     `/repos/${owner}/${repo}/pulls/${pullNumber}/files?per_page=${PR_FILES_PAGE_LIMIT}`,
+    { owner },
   );
 
   return {
@@ -181,6 +185,7 @@ export async function listPullRequestComments(
   // Inline review comments on specific lines live at /pulls/${pullNumber}/comments.
   const comments = await githubRequest<GitHubConversationComment[]>(
     `/repos/${owner}/${repo}/issues/${pullNumber}/comments?per_page=100`,
+    { owner },
   );
 
   return comments.map((comment) => ({
@@ -200,6 +205,7 @@ export async function getPullRequestReviews(
 ) {
   const reviews = await githubRequest<GitHubPullRequestReview[]>(
     `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews?per_page=100`,
+    { owner },
   );
 
   return reviews.map((review) => ({
@@ -243,6 +249,7 @@ export async function updatePullRequest(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
+      owner,
     },
   );
 
@@ -268,6 +275,7 @@ export async function createPullRequest(
         base: input.base,
         ...(input.draft !== undefined ? { draft: input.draft } : {}),
       }),
+      owner,
     },
   );
 
@@ -286,6 +294,7 @@ export async function getPullRequestDiff(
         Accept: "application/vnd.github.diff",
       },
       responseType: "text",
+      owner,
     },
   );
 
