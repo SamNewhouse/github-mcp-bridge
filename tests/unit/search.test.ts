@@ -36,9 +36,6 @@ function makeCodeSearchResult(items: { path: string; name: string }[]) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// searchCode
-// ---------------------------------------------------------------------------
 describe("searchCode", () => {
   /**
    * Happy path — returns mapped items with matches flattened to fragment strings.
@@ -106,9 +103,6 @@ describe("searchCode", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// searchFiles
-// ---------------------------------------------------------------------------
 describe("searchFiles", () => {
   /**
    * Pattern matching — only paths containing the pattern should be returned.
