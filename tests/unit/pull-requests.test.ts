@@ -42,6 +42,13 @@ function makePR(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+/**
+ * listOpenPullRequests
+ *
+ * Fetches open pull requests for a repository and maps each to a lean summary
+ * shape — omitting body, mergeable, and diff stats to keep the list payload
+ * small. Always called with state=open and per_page=100.
+ */
 describe("listOpenPullRequests", () => {
   /**
    * Return shape — verifies the summary fields returned for each PR.
@@ -105,6 +112,13 @@ describe("listOpenPullRequests", () => {
   });
 });
 
+/**
+ * listPullRequests
+ *
+ * Fetches pull requests with a configurable state filter (open/closed/all).
+ * Defaults to state=open. Returns a slightly richer shape than
+ * listOpenPullRequests, including the draft field. Uses per_page=100.
+ */
 describe("listPullRequests", () => {
   /**
    * Default state — calling without a state argument defaults to "open".
@@ -193,6 +207,13 @@ describe("listPullRequests", () => {
   });
 });
 
+/**
+ * getPullRequest
+ *
+ * Fetches full detail for a single PR by number, including body, mergeable
+ * status, diff stats, and headSha. draft defaults to false when absent.
+ * mergeable is preserved as null when GitHub's merge check is still pending.
+ */
 describe("getPullRequest", () => {
   /**
    * Happy path — returns full detail including body, mergeable, and stats.
@@ -249,6 +270,14 @@ describe("getPullRequest", () => {
   });
 });
 
+/**
+ * getPullRequestDiff
+ *
+ * Fetches the raw unified diff for a pull request. Requires the
+ * application/vnd.github.diff Accept header and responseType: "text" so
+ * githubRequest returns the raw diff string rather than attempting JSON
+ * parsing. Returns { pullNumber, diff }.
+ */
 describe("getPullRequestDiff", () => {
   /**
    * Happy path — returns pullNumber and the raw unified diff string.
@@ -308,6 +337,14 @@ describe("getPullRequestDiff", () => {
   });
 });
 
+/**
+ * listPullRequestComments
+ *
+ * Fetches conversation (timeline) comments on a pull request using the
+ * /issues/:number/comments endpoint — not the inline review comments
+ * endpoint. Maps each comment to a flat shape with author from user.login.
+ * Uses per_page=100.
+ */
 describe("listPullRequestComments", () => {
   /**
    * Return shape — verifies each comment is mapped correctly.
@@ -374,6 +411,14 @@ describe("listPullRequestComments", () => {
   });
 });
 
+/**
+ * getPullRequestReviews
+ *
+ * Fetches all reviews on a pull request from /pulls/:pullNumber/reviews.
+ * Maps each review to a flat shape with author from user.login.
+ * submitted_at is preserved as null for pending or dismissed reviews.
+ * Uses per_page=100.
+ */
 describe("getPullRequestReviews", () => {
   function makeReview(overrides: Partial<Record<string, unknown>> = {}) {
     return {
@@ -488,6 +533,14 @@ describe("getPullRequestReviews", () => {
   });
 });
 
+/**
+ * updatePullRequest
+ *
+ * Sends a PATCH request to update one or more fields of an existing PR.
+ * Requires at least one field to be supplied; throws AppError otherwise.
+ * Only provided fields are included in the PATCH body to avoid accidentally
+ * clearing fields the caller didn't intend to change.
+ */
 describe("updatePullRequest", () => {
   /**
    * Empty payload guard — mirrors updateIssue behaviour.
@@ -545,6 +598,14 @@ describe("updatePullRequest", () => {
   });
 });
 
+/**
+ * createPullRequest
+ *
+ * Creates a new PR via POST. title, head, and base are required; body
+ * defaults to empty string. draft is forwarded only when explicitly
+ * supplied — it is omitted from the body entirely when not provided.
+ * Returns the fully mapped PR including number and html_url.
+ */
 describe("createPullRequest", () => {
   /**
    * Happy path — all required fields supplied.
@@ -608,6 +669,14 @@ describe("createPullRequest", () => {
   });
 });
 
+/**
+ * listPullRequestFiles
+ *
+ * Lists files changed in a pull request using per_page=100. The GitHub
+ * API caps this endpoint at 100 files — when exactly 100 are returned
+ * the result is marked truncated: true to signal potential incompleteness.
+ * Binary files have no patch; these are normalised to null.
+ */
 describe("listPullRequestFiles", () => {
   function makeFile(filename: string) {
     return {
