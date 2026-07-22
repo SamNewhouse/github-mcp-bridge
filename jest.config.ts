@@ -6,6 +6,8 @@ const config: Config = {
       displayName: "unit",
       testEnvironment: "node",
       roots: ["<rootDir>/tests/unit"],
+      // Picks up both *.test.ts (existing) and *.unit.ts (mutation-tool files)
+      testMatch: ["**/*.test.ts", "**/*.unit.ts"],
       transform: {
         "^.+\.tsx?$": [
           "ts-jest",
