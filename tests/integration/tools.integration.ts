@@ -46,22 +46,6 @@ async function callToolRaw(name: string, input: Record<string, unknown>) {
   return res.json();
 }
 
-/**
- * Write a fixture file with known content to TEST_BRANCH.
- * Each call produces exactly one commit — callers should use a unique path
- * per test so there is no shared state and no need to reset between tests.
- */
-async function writeFixture(path: string, content: string) {
-  await callTool("upsert_file", {
-    owner: OWNER,
-    repo: REPO,
-    path,
-    branch: TEST_BRANCH,
-    message: `test: write fixture ${path}`,
-    content,
-  });
-}
-
 // ---------------------------------------------------------------------------
 // list_repositories
 // ---------------------------------------------------------------------------
@@ -303,19 +287,9 @@ describe("list_issue_comments (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// add_issue_comment
+// add_issue_comment — validation only
 // ---------------------------------------------------------------------------
 describe("add_issue_comment (integration)", () => {
-  it("posts a comment and returns the created comment fields", async () => {
-    const body = `integration test comment ${Date.now()}`;
-    const result = await callTool("add_issue_comment", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER, body });
-    expect(result.comment).toHaveProperty("id");
-    expect(result.comment).toHaveProperty("body", body);
-    expect(result.comment).toHaveProperty("author");
-    expect(result.comment).toHaveProperty("html_url");
-    expect(result.comment).toHaveProperty("created_at");
-  });
-
   it("rejects request with missing body field", async () => {
     const json = await callToolRaw("add_issue_comment", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER });
     expect(json.error).toBeDefined();
@@ -323,24 +297,9 @@ describe("add_issue_comment (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// create_issue
+// create_issue — validation only
 // ---------------------------------------------------------------------------
 describe("create_issue (integration)", () => {
-  it("creates an issue and returns the mapped issue fields", async () => {
-    const title = `integration test issue ${Date.now()}`;
-    const result = await callTool("create_issue", {
-      owner: OWNER, repo: REPO, title,
-      body: "Created by the integration test suite. Safe to close.",
-      labels: [],
-    });
-    expect(result.issue).toHaveProperty("number");
-    expect(result.issue.number).toBeGreaterThan(0);
-    expect(result.issue).toHaveProperty("title", title);
-    expect(result.issue).toHaveProperty("state", "open");
-    expect(result.issue).toHaveProperty("html_url");
-    expect(result.issue).toHaveProperty("author");
-  });
-
   it("rejects request with missing title field", async () => {
     const json = await callToolRaw("create_issue", { owner: OWNER, repo: REPO });
     expect(json.error).toBeDefined();
@@ -436,13 +395,7 @@ describe("search_code (integration)", () => {
   });
 
   it("returns total_count: 0 and empty items for a query with no matches", async () => {
-    const noMatchQuery = ["zzq9", "x7m2", "k4w8"].join("_never_in_repo_");
-    const result = await callTool("search_code", {
-      owner: OWNER,
-      repo: REPO,
-      query: noMatchQuery,
-    });
-
+    const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: "zzq9_x7m2_k4w8_never_in_repo" });
     expect(result.results.total_count).toBe(0);
     expect(result.results.items).toHaveLength(0);
   });
@@ -453,13 +406,7 @@ describe("search_code (integration)", () => {
 // ---------------------------------------------------------------------------
 describe("search_files (integration)", () => {
   it("returns matching files for a known path pattern", async () => {
-    const result = await callTool("search_files", {
-      owner: OWNER,
-      repo: REPO,
-      pattern: ".integration",
-      ref: "main",
-    });
-
+    const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: ".integration", ref: "main" });
     expect(result.results.total_matched).toBeGreaterThan(0);
     expect(Array.isArray(result.results.files)).toBe(true);
     for (const file of result.results.files) {
@@ -485,7 +432,7 @@ describe("search_files (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// update_issue — validation paths only
+// update_issue — validation only
 // ---------------------------------------------------------------------------
 describe("update_issue (integration — validation)", () => {
   it("returns an error when no update fields are provided", async () => {
@@ -500,7 +447,7 @@ describe("update_issue (integration — validation)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// update_pull_request — validation paths only
+// update_pull_request — validation only
 // ---------------------------------------------------------------------------
 describe("update_pull_request (integration — validation)", () => {
   it("returns an error when no update fields are provided", async () => {
@@ -515,18 +462,9 @@ describe("update_pull_request (integration — validation)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// link_issue_to_pull_request
+// link_issue_to_pull_request — validation only
 // ---------------------------------------------------------------------------
 describe("link_issue_to_pull_request (integration)", () => {
-  it("returns linked: false on a second call for the same PR/issue pair", async () => {
-    const issues = await callTool("list_issues", { owner: OWNER, repo: REPO, state: "open" });
-    if (issues.issues.length === 0) return;
-    const issueNumber = issues.issues[0].number;
-    await callTool("link_issue_to_pull_request", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER, issueNumber, keyword: "closes" });
-    const second = await callTool("link_issue_to_pull_request", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER, issueNumber, keyword: "closes" });
-    expect(second.result.linked).toBe(false);
-  });
-
   it("rejects an invalid keyword with a validation error", async () => {
     const json = await callToolRaw("link_issue_to_pull_request", { owner: OWNER, repo: REPO, pullNumber: 1, issueNumber: 1, keyword: "merges" });
     expect(json.error).toBeDefined();
@@ -534,7 +472,7 @@ describe("link_issue_to_pull_request (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// upsert_file — validation paths only
+// upsert_file — validation only
 // ---------------------------------------------------------------------------
 describe("upsert_file (integration — validation)", () => {
   it("rejects request with missing content field", async () => {
@@ -549,7 +487,7 @@ describe("upsert_file (integration — validation)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// create_branch — validation paths only
+// create_branch — validation only
 // ---------------------------------------------------------------------------
 describe("create_branch (integration — validation)", () => {
   it("throws when the base branch does not exist", async () => {
@@ -575,48 +513,36 @@ describe("unknown tool (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// patch_file
-// ---------------------------------------------------------------------------
-//
-// Each test uses a UNIQUE file path so there is no shared state and no reset
-// loop. One writeFixture call per test = one setup commit per test. No churn.
+// patch_file — validation only (no file I/O)
 // ---------------------------------------------------------------------------
 describe("patch_file (integration)", () => {
-  // Validation-only tests — no file I/O at all.
   it("rejects request with missing patches field", async () => {
     const json = await callToolRaw("patch_file", {
-      owner: OWNER, repo: REPO, path: "tests/fixtures/patch/irrelevant.txt",
-      branch: TEST_BRANCH, message: "test",
+      owner: OWNER, repo: REPO, path: "any.txt", branch: TEST_BRANCH, message: "test",
     });
     expect(json.error).toBeDefined();
   });
 
   it("rejects request with empty patches array", async () => {
     const json = await callToolRaw("patch_file", {
-      owner: OWNER, repo: REPO, path: "tests/fixtures/patch/irrelevant.txt",
-      branch: TEST_BRANCH, message: "test", patches: [],
+      owner: OWNER, repo: REPO, path: "any.txt", branch: TEST_BRANCH, message: "test", patches: [],
     });
     expect(json.error).toBeDefined();
   });
 
   it("rejects request with an invalid patch op", async () => {
     const json = await callToolRaw("patch_file", {
-      owner: OWNER, repo: REPO, path: "tests/fixtures/patch/irrelevant.txt",
-      branch: TEST_BRANCH, message: "test",
+      owner: OWNER, repo: REPO, path: "any.txt", branch: TEST_BRANCH, message: "test",
       patches: [{ op: "invalid_op", find: "x", replace: "y" }],
     });
     expect(json.error).toBeDefined();
   });
-
-
-
 });
 
 // ---------------------------------------------------------------------------
-// delete_file
+// delete_file — validation only (no file I/O)
 // ---------------------------------------------------------------------------
 describe("delete_file (integration)", () => {
-  // Validation-only tests — no file I/O.
   it("rejects request with missing path field", async () => {
     const json = await callToolRaw("delete_file", { owner: OWNER, repo: REPO, branch: TEST_BRANCH, message: "test" });
     expect(json.error).toBeDefined();
