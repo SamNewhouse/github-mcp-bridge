@@ -77,6 +77,7 @@ export async function getFileContents(
 ) {
   const file = await githubRequest<GitHubContentFile>(
     `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
+    { owner },
   );
 
   if (file.type !== "file") {
@@ -191,6 +192,7 @@ export async function listDirectory(
 ) {
   const entries = await githubRequest<GitHubContentDirectoryEntry[]>(
     `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
+    { owner },
   );
 
   if (!Array.isArray(entries)) {
@@ -221,6 +223,7 @@ export async function upsertFile(
   try {
     const existing = await githubRequest<GitHubContentFile>(
       `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
+      { owner },
     );
 
     if (existing.type === "file") {
@@ -245,6 +248,7 @@ export async function upsertFile(
         branch: input.branch,
         ...(existingSha ? { sha: existingSha } : {}),
       }),
+      owner,
     },
   );
 
@@ -276,6 +280,7 @@ export async function deleteFile(
   // Fetch the current file to obtain its SHA (required by the GitHub API).
   const existing = await githubRequest<GitHubContentFile>(
     `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
+    { owner },
   );
 
   if (existing.type !== "file") {
@@ -292,6 +297,7 @@ export async function deleteFile(
         sha: existing.sha,
         branch: input.branch,
       }),
+      owner,
     },
   );
 
@@ -366,6 +372,7 @@ export async function patchFile(
   // Read the current file.
   const existing = await githubRequest<GitHubContentFile>(
     `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
+    { owner },
   );
 
   if (existing.type !== "file") {
@@ -409,6 +416,7 @@ export async function patchFile(
         branch: input.branch,
         sha: existing.sha,
       }),
+      owner,
     },
   );
 
