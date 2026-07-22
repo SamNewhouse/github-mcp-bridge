@@ -1,6 +1,12 @@
 import * as http from "node:http";
 import { z } from "zod";
 import { assertAuthorized } from "./auth";
+import {
+  getClientIp,
+  isRateLimited,
+  recordAuthFailure,
+  recordAuthSuccess,
+} from "./lib/rateLimit";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
 import {
   getRequestUrl,
@@ -150,9 +156,22 @@ export async function handleMcpRequest(
       return sendJson(res, 404, { error: "Not found" });
     }
 
+    const clientIp = getClientIp(req);
+
+    if (isRateLimited(clientIp)) {
+      log.warn("authorization_rate_limited", {
+        method: req.method ?? null,
+        url: req.url ?? null,
+        ip: clientIp,
+      });
+      return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Too many failed attempts — try again later");
+    }
+
     try {
       assertAuthorized(req, log);
+      recordAuthSuccess(clientIp);
     } catch {
+      recordAuthFailure(clientIp);
       return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Unauthorized");
     }
 
