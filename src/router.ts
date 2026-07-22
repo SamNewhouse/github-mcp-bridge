@@ -164,7 +164,12 @@ export async function handleMcpRequest(
         url: req.url ?? null,
         ip: clientIp,
       });
-      return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Too many failed attempts — try again later");
+      return sendJsonRpcError(
+        res,
+        null,
+        RPC_UNAUTHORIZED,
+        "Too many failed attempts — try again later",
+      );
     }
 
     try {

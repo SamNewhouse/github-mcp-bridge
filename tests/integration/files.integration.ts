@@ -78,7 +78,7 @@ describe("get_file_contents (integration)", () => {
         owner: OWNER,
         repo: REPO,
         path: "src",
-      })
+      }),
     ).rejects.toThrow();
   });
 
@@ -93,7 +93,7 @@ describe("get_file_contents (integration)", () => {
         owner: OWNER,
         repo: REPO,
         path: "src/does-not-exist.ts",
-      })
+      }),
     ).rejects.toThrow();
   });
 

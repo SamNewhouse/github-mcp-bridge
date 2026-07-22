@@ -16,7 +16,12 @@ function makeTree(paths: string[]) {
     sha: "treesha",
     url: "https://api.github.com/repos/owner/repo/git/trees/HEAD",
     truncated: false,
-    tree: paths.map((p) => ({ path: p, type: "blob", sha: "filesha", url: "" })),
+    tree: paths.map((p) => ({
+      path: p,
+      type: "blob",
+      sha: "filesha",
+      url: "",
+    })),
   };
 }
 
@@ -31,7 +36,12 @@ function makeCodeSearchResult(items: { path: string; name: string }[]) {
       url: "https://api.github.com/repos/owner/repo/contents/" + item.path,
       html_url: "https://github.com/owner/repo/blob/main/" + item.path,
       repository: { full_name: "owner/repo" },
-      text_matches: [{ fragment: "matching fragment", matches: [{ text: "query", indices: [0, 5] }] }],
+      text_matches: [
+        {
+          fragment: "matching fragment",
+          matches: [{ text: "query", indices: [0, 5] }],
+        },
+      ],
     })),
   };
 }
@@ -52,9 +62,7 @@ describe("searchCode", () => {
    */
   it("returns mapped items with fragments from text_matches", async () => {
     mock.mockResolvedValueOnce(
-      makeCodeSearchResult([
-        { path: "src/github/files.ts", name: "files.ts" },
-      ])
+      makeCodeSearchResult([{ path: "src/github/files.ts", name: "files.ts" }]),
     );
 
     const result = await searchCode("owner", "repo", "githubRequest");
@@ -128,7 +136,7 @@ describe("searchFiles", () => {
    */
   it("returns only files whose paths contain the pattern", async () => {
     mock.mockResolvedValueOnce(
-      makeTree(["src/github/files.ts", "src/lib/validation.ts", "README.md"])
+      makeTree(["src/github/files.ts", "src/lib/validation.ts", "README.md"]),
     );
 
     const result = await searchFiles("owner", "repo", "github");

@@ -4,19 +4,19 @@ on:
   pull_request:
     branches: [main]
     paths-ignore:
-      - 'tests/fixtures/**'
-      - '**/*.tmp'
-      - '**/*.temp'
-      - '**/tmp/**'
-      - '**/temp/**'
+      - "tests/fixtures/**"
+      - "**/*.tmp"
+      - "**/*.temp"
+      - "**/tmp/**"
+      - "**/temp/**"
   push:
     branches: [main]
     paths-ignore:
-      - 'tests/fixtures/**'
-      - '**/*.tmp'
-      - '**/*.temp'
-      - '**/tmp/**'
-      - '**/temp/**'
+      - "tests/fixtures/**"
+      - "**/*.tmp"
+      - "**/*.temp"
+      - "**/tmp/**"
+      - "**/temp/**"
 
 jobs:
   typecheck:

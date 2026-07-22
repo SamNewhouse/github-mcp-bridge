@@ -85,7 +85,10 @@ describe("list_repositories (integration)", () => {
  */
 describe("list_branches (integration)", () => {
   it("returns branches with name, sha, and protected fields", async () => {
-    const result = await callTool("list_branches", { owner: OWNER, repo: REPO });
+    const result = await callTool("list_branches", {
+      owner: OWNER,
+      repo: REPO,
+    });
     expect(Array.isArray(result.branches)).toBe(true);
     expect(result.branches.length).toBeGreaterThan(0);
     const branch = result.branches[0];
@@ -109,7 +112,11 @@ describe("list_branches (integration)", () => {
  */
 describe("get_branch (integration)", () => {
   it("returns branch detail including latest_commit for main", async () => {
-    const result = await callTool("get_branch", { owner: OWNER, repo: REPO, branch: "main" });
+    const result = await callTool("get_branch", {
+      owner: OWNER,
+      repo: REPO,
+      branch: "main",
+    });
     expect(result.branch.name).toBe("main");
     expect(result.branch).toHaveProperty("sha");
     expect(result.branch.latest_commit).toHaveProperty("message");
@@ -119,7 +126,11 @@ describe("get_branch (integration)", () => {
 
   it("throws for a non-existent branch", async () => {
     await expect(
-      callTool("get_branch", { owner: OWNER, repo: REPO, branch: "branch-that-does-not-exist-xyz" })
+      callTool("get_branch", {
+        owner: OWNER,
+        repo: REPO,
+        branch: "branch-that-does-not-exist-xyz",
+      }),
     ).rejects.toThrow();
   });
 });
@@ -133,7 +144,10 @@ describe("get_branch (integration)", () => {
  */
 describe("list_open_pull_requests (integration)", () => {
   it("returns an array of open pull requests with expected fields", async () => {
-    const result = await callTool("list_open_pull_requests", { owner: OWNER, repo: REPO });
+    const result = await callTool("list_open_pull_requests", {
+      owner: OWNER,
+      repo: REPO,
+    });
     expect(Array.isArray(result.pull_requests)).toBe(true);
     if (result.pull_requests.length > 0) {
       const pr = result.pull_requests[0];
@@ -154,13 +168,21 @@ describe("list_open_pull_requests (integration)", () => {
  */
 describe("list_pull_requests (integration)", () => {
   it("returns an array when state=all", async () => {
-    const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
+    const result = await callTool("list_pull_requests", {
+      owner: OWNER,
+      repo: REPO,
+      state: "all",
+    });
     expect(Array.isArray(result.pull_requests)).toBe(true);
     expect(result.pull_requests.length).toBeGreaterThan(0);
   });
 
   it("each PR has the expected mapped fields", async () => {
-    const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
+    const result = await callTool("list_pull_requests", {
+      owner: OWNER,
+      repo: REPO,
+      state: "all",
+    });
     for (const pr of result.pull_requests) {
       expect(pr).toHaveProperty("number");
       expect(pr).toHaveProperty("title");
@@ -176,7 +198,11 @@ describe("list_pull_requests (integration)", () => {
   });
 
   it("rejects an invalid state value", async () => {
-    const json = await callToolRaw("list_pull_requests", { owner: OWNER, repo: REPO, state: "invalid" });
+    const json = await callToolRaw("list_pull_requests", {
+      owner: OWNER,
+      repo: REPO,
+      state: "invalid",
+    });
     expect(json.error).toBeDefined();
   });
 });
@@ -190,7 +216,11 @@ describe("list_pull_requests (integration)", () => {
  */
 describe("get_pull_request (integration)", () => {
   it("returns full PR detail with all mapped fields", async () => {
-    const result = await callTool("get_pull_request", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("get_pull_request", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     expect(result.pullRequest).toHaveProperty("number", KNOWN_PR_NUMBER);
     expect(result.pullRequest).toHaveProperty("draft");
     expect(result.pullRequest).toHaveProperty("headSha");
@@ -200,7 +230,11 @@ describe("get_pull_request (integration)", () => {
 
   it("throws for a non-existent pull request number", async () => {
     await expect(
-      callTool("get_pull_request", { owner: OWNER, repo: REPO, pullNumber: 999999 })
+      callTool("get_pull_request", {
+        owner: OWNER,
+        repo: REPO,
+        pullNumber: 999999,
+      }),
     ).rejects.toThrow();
   });
 });
@@ -214,7 +248,11 @@ describe("get_pull_request (integration)", () => {
  */
 describe("get_pull_request_diff (integration)", () => {
   it("returns a non-empty diff string for a known PR", async () => {
-    const result = await callTool("get_pull_request_diff", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("get_pull_request_diff", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     expect(result.diff.pullNumber).toBe(KNOWN_PR_NUMBER);
     expect(typeof result.diff.diff).toBe("string");
     expect(result.diff.diff.length).toBeGreaterThan(0);
@@ -231,12 +269,20 @@ describe("get_pull_request_diff (integration)", () => {
  */
 describe("get_pull_request_reviews (integration)", () => {
   it("returns a reviews array for a known PR", async () => {
-    const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("get_pull_request_reviews", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     expect(Array.isArray(result.reviews)).toBe(true);
   });
 
   it("each review has the expected response shape", async () => {
-    const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("get_pull_request_reviews", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     if (result.reviews.length > 0) {
       const review = result.reviews[0];
       expect(review).toHaveProperty("id");
@@ -251,7 +297,11 @@ describe("get_pull_request_reviews (integration)", () => {
 
   it("throws for a non-existent pull request number", async () => {
     await expect(
-      callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: 999999 })
+      callTool("get_pull_request_reviews", {
+        owner: OWNER,
+        repo: REPO,
+        pullNumber: 999999,
+      }),
     ).rejects.toThrow();
   });
 });
@@ -265,14 +315,22 @@ describe("get_pull_request_reviews (integration)", () => {
  */
 describe("list_pull_request_files (integration)", () => {
   it("returns files and truncated flag for a known PR", async () => {
-    const result = await callTool("list_pull_request_files", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("list_pull_request_files", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     expect(result.files).toHaveProperty("files");
     expect(Array.isArray(result.files.files)).toBe(true);
     expect(typeof result.files.truncated).toBe("boolean");
   });
 
   it("each file entry has the expected shape", async () => {
-    const result = await callTool("list_pull_request_files", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("list_pull_request_files", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     if (result.files.files.length > 0) {
       const file = result.files.files[0];
       expect(file).toHaveProperty("path");
@@ -294,7 +352,11 @@ describe("list_pull_request_files (integration)", () => {
  */
 describe("list_pull_request_comments (integration)", () => {
   it("returns a comments array for a known PR", async () => {
-    const result = await callTool("list_pull_request_comments", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("list_pull_request_comments", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     expect(Array.isArray(result.comments)).toBe(true);
     if (result.comments.length > 0) {
       expect(result.comments[0]).toHaveProperty("id");
@@ -304,7 +366,11 @@ describe("list_pull_request_comments (integration)", () => {
   });
 
   it("each comment has the expected response shape", async () => {
-    const result = await callTool("list_pull_request_comments", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("list_pull_request_comments", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
     if (result.comments.length > 0) {
       const comment = result.comments[0];
       expect(comment).toHaveProperty("id");
@@ -326,7 +392,11 @@ describe("list_pull_request_comments (integration)", () => {
  */
 describe("list_issues (integration)", () => {
   it("returns open issues excluding pull requests", async () => {
-    const result = await callTool("list_issues", { owner: OWNER, repo: REPO, state: "open" });
+    const result = await callTool("list_issues", {
+      owner: OWNER,
+      repo: REPO,
+      state: "open",
+    });
     expect(Array.isArray(result.issues)).toBe(true);
     for (const issue of result.issues) {
       expect(issue).toHaveProperty("number");
@@ -337,7 +407,11 @@ describe("list_issues (integration)", () => {
   });
 
   it("returns closed issues when state=closed", async () => {
-    const result = await callTool("list_issues", { owner: OWNER, repo: REPO, state: "closed" });
+    const result = await callTool("list_issues", {
+      owner: OWNER,
+      repo: REPO,
+      state: "closed",
+    });
     expect(Array.isArray(result.issues)).toBe(true);
     for (const issue of result.issues) {
       expect(issue.state).toBe("closed");
@@ -345,7 +419,11 @@ describe("list_issues (integration)", () => {
   });
 
   it("rejects an invalid state value", async () => {
-    const json = await callToolRaw("list_issues", { owner: OWNER, repo: REPO, state: "invalid" });
+    const json = await callToolRaw("list_issues", {
+      owner: OWNER,
+      repo: REPO,
+      state: "invalid",
+    });
     expect(json.error).toBeDefined();
   });
 });
@@ -382,13 +460,17 @@ describe("get_issue (integration)", () => {
 
   it("throws when the number belongs to a pull request", async () => {
     await expect(
-      callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER })
+      callTool("get_issue", {
+        owner: OWNER,
+        repo: REPO,
+        issueNumber: KNOWN_PR_NUMBER,
+      }),
     ).rejects.toThrow();
   });
 
   it("throws for a non-existent issue number", async () => {
     await expect(
-      callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: 999999 })
+      callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: 999999 }),
     ).rejects.toThrow();
   });
 });
@@ -454,7 +536,11 @@ describe("add_issue_comment (integration — validation)", () => {
  */
 describe("list_issue_comments (integration)", () => {
   it("returns comments array for a known issue/PR number", async () => {
-    const result = await callTool("list_issue_comments", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER });
+    const result = await callTool("list_issue_comments", {
+      owner: OWNER,
+      repo: REPO,
+      issueNumber: KNOWN_PR_NUMBER,
+    });
     expect(Array.isArray(result.comments)).toBe(true);
     if (result.comments.length > 0) {
       expect(result.comments[0]).toHaveProperty("id");
@@ -465,7 +551,11 @@ describe("list_issue_comments (integration)", () => {
 
   it("throws for a non-existent issue number", async () => {
     await expect(
-      callTool("list_issue_comments", { owner: OWNER, repo: REPO, issueNumber: 999999 })
+      callTool("list_issue_comments", {
+        owner: OWNER,
+        repo: REPO,
+        issueNumber: 999999,
+      }),
     ).rejects.toThrow();
   });
 });
@@ -479,9 +569,17 @@ describe("list_issue_comments (integration)", () => {
  */
 describe("get_commit (integration)", () => {
   it("returns commit detail with stats and files for a real commit SHA", async () => {
-    const branch = await callTool("get_branch", { owner: OWNER, repo: REPO, branch: "main" });
+    const branch = await callTool("get_branch", {
+      owner: OWNER,
+      repo: REPO,
+      branch: "main",
+    });
     const sha = branch.branch.sha;
-    const result = await callTool("get_commit", { owner: OWNER, repo: REPO, ref: sha });
+    const result = await callTool("get_commit", {
+      owner: OWNER,
+      repo: REPO,
+      ref: sha,
+    });
     expect(result.commit.sha).toBe(sha);
     expect(typeof result.commit.message).toBe("string");
     expect(result.commit.stats).not.toBeUndefined();
@@ -490,7 +588,11 @@ describe("get_commit (integration)", () => {
 
   it("throws for an invalid commit SHA", async () => {
     await expect(
-      callTool("get_commit", { owner: OWNER, repo: REPO, ref: "0000000000000000000000000000000000000000" })
+      callTool("get_commit", {
+        owner: OWNER,
+        repo: REPO,
+        ref: "0000000000000000000000000000000000000000",
+      }),
     ).rejects.toThrow();
   });
 });
@@ -504,7 +606,12 @@ describe("get_commit (integration)", () => {
  */
 describe("list_commits (integration)", () => {
   it("returns recent commits with expected fields", async () => {
-    const result = await callTool("list_commits", { owner: OWNER, repo: REPO, branch: "main", perPage: 5 });
+    const result = await callTool("list_commits", {
+      owner: OWNER,
+      repo: REPO,
+      branch: "main",
+      perPage: 5,
+    });
     expect(Array.isArray(result.commits)).toBe(true);
     expect(result.commits.length).toBeGreaterThan(0);
     const commit = result.commits[0];
@@ -515,13 +622,22 @@ describe("list_commits (integration)", () => {
   });
 
   it("filters commits to those touching a specific path", async () => {
-    const result = await callTool("list_commits", { owner: OWNER, repo: REPO, path: "package.json", perPage: 10 });
+    const result = await callTool("list_commits", {
+      owner: OWNER,
+      repo: REPO,
+      path: "package.json",
+      perPage: 10,
+    });
     expect(Array.isArray(result.commits)).toBe(true);
     expect(result.commits.length).toBeGreaterThan(0);
   });
 
   it("respects the perPage limit", async () => {
-    const result = await callTool("list_commits", { owner: OWNER, repo: REPO, perPage: 3 });
+    const result = await callTool("list_commits", {
+      owner: OWNER,
+      repo: REPO,
+      perPage: 3,
+    });
     expect(result.commits.length).toBeLessThanOrEqual(3);
   });
 });
@@ -535,7 +651,11 @@ describe("list_commits (integration)", () => {
  */
 describe("list_directory (integration)", () => {
   it("returns entries with file and dir types at the repo root", async () => {
-    const result = await callTool("list_directory", { owner: OWNER, repo: REPO, path: "" });
+    const result = await callTool("list_directory", {
+      owner: OWNER,
+      repo: REPO,
+      path: "",
+    });
     expect(Array.isArray(result.entries)).toBe(true);
     const types = result.entries.map((e: any) => e.type);
     expect(types).toContain("file");
@@ -543,7 +663,11 @@ describe("list_directory (integration)", () => {
   });
 
   it("returns file entries for a known directory path", async () => {
-    const result = await callTool("list_directory", { owner: OWNER, repo: REPO, path: "src/github" });
+    const result = await callTool("list_directory", {
+      owner: OWNER,
+      repo: REPO,
+      path: "src/github",
+    });
     expect(result.entries.length).toBeGreaterThan(0);
     for (const entry of result.entries) {
       expect(entry.type).toBe("file");
@@ -552,7 +676,11 @@ describe("list_directory (integration)", () => {
 
   it("throws for a non-existent path", async () => {
     await expect(
-      callTool("list_directory", { owner: OWNER, repo: REPO, path: "does/not/exist" })
+      callTool("list_directory", {
+        owner: OWNER,
+        repo: REPO,
+        path: "does/not/exist",
+      }),
     ).rejects.toThrow();
   });
 });
@@ -566,7 +694,11 @@ describe("list_directory (integration)", () => {
  */
 describe("search_code (integration)", () => {
   it("returns results with path and matches for a known query", async () => {
-    const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: "githubRequest" });
+    const result = await callTool("search_code", {
+      owner: OWNER,
+      repo: REPO,
+      query: "githubRequest",
+    });
     expect(result.results.total_count).toBeGreaterThan(0);
     expect(Array.isArray(result.results.items)).toBe(true);
     const item = result.results.items[0];
@@ -579,7 +711,11 @@ describe("search_code (integration)", () => {
     // including this test file itself. We build it at runtime from parts
     // so it is never present as a literal string in the codebase.
     const noMatchQuery = ["xQ9", "zW2", "mK7"].join("__nomatch__");
-    const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: noMatchQuery });
+    const result = await callTool("search_code", {
+      owner: OWNER,
+      repo: REPO,
+      query: noMatchQuery,
+    });
     expect(result.results.total_count).toBe(0);
     expect(result.results.items).toHaveLength(0);
   });
@@ -595,7 +731,12 @@ describe("search_code (integration)", () => {
  */
 describe("search_files (integration)", () => {
   it("returns matching files for a known path pattern", async () => {
-    const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: ".integration", ref: "main" });
+    const result = await callTool("search_files", {
+      owner: OWNER,
+      repo: REPO,
+      pattern: ".integration",
+      ref: "main",
+    });
     expect(result.results.total_matched).toBeGreaterThan(0);
     expect(Array.isArray(result.results.files)).toBe(true);
     for (const file of result.results.files) {
@@ -607,18 +748,30 @@ describe("search_files (integration)", () => {
     // Build the pattern at runtime so it never exists as a literal in the
     // codebase and cannot be indexed and self-matched by search_files.
     const noMatchPattern = ["xQ9", "zW2", "mK7"].join("__nomatch__");
-    const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: noMatchPattern });
+    const result = await callTool("search_files", {
+      owner: OWNER,
+      repo: REPO,
+      pattern: noMatchPattern,
+    });
     expect(result.results.total_matched).toBe(0);
     expect(result.results.files).toHaveLength(0);
   });
 
   it("returns results when a ref is provided", async () => {
-    const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: "github", ref: "main" });
+    const result = await callTool("search_files", {
+      owner: OWNER,
+      repo: REPO,
+      pattern: "github",
+      ref: "main",
+    });
     expect(result.results.total_matched).toBeGreaterThan(0);
   });
 
   it("rejects request with missing pattern field", async () => {
-    const json = await callToolRaw("search_files", { owner: OWNER, repo: REPO });
+    const json = await callToolRaw("search_files", {
+      owner: OWNER,
+      repo: REPO,
+    });
     expect(json.error).toBeDefined();
   });
 });

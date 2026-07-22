@@ -20,67 +20,67 @@ The bridge also exposes `tools/list` so any client can discover all available to
 
 ### Repositories
 
-| Tool | Description |
-| ---- | ----------- |
+| Tool                | Description                                        |
+| ------------------- | -------------------------------------------------- |
 | `list_repositories` | List repositories accessible to the configured PAT |
 
 ### Branches
 
-| Tool | Description |
-| ---- | ----------- |
-| `list_branches` | List branches for a repository |
-| `get_branch` | Get branch details including latest commit SHA, message, and protection status |
-| `create_branch` | Create a branch from an existing base branch |
+| Tool            | Description                                                                    |
+| --------------- | ------------------------------------------------------------------------------ |
+| `list_branches` | List branches for a repository                                                 |
+| `get_branch`    | Get branch details including latest commit SHA, message, and protection status |
+| `create_branch` | Create a branch from an existing base branch                                   |
 
 ### Files
 
-| Tool | Description |
-| ---- | ----------- |
-| `get_file_contents` | Get the contents of a file in a repository. Files larger than 3.5 MB are truncated — check the `truncated` flag in the response |
-| `get_multiple_files` | Get the contents of multiple files in a repository. Results are paginated — when `hasMore` is true, call again with `nextCursor` to fetch the next page |
-| `list_directory` | List files and directories at a repository path |
-| `upsert_file` | Create or update a file in a repository branch |
-| `patch_file` | Apply targeted text patches to a file without replacing the entire content. Supports `replace_once`, `replace_all`, `insert_before`, and `insert_after` operations |
-| `delete_file` | Delete a single file from a branch |
+| Tool                 | Description                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_file_contents`  | Get the contents of a file in a repository. Files larger than 3.5 MB are truncated — check the `truncated` flag in the response                                    |
+| `get_multiple_files` | Get the contents of multiple files in a repository. Results are paginated — when `hasMore` is true, call again with `nextCursor` to fetch the next page            |
+| `list_directory`     | List files and directories at a repository path                                                                                                                    |
+| `upsert_file`        | Create or update a file in a repository branch                                                                                                                     |
+| `patch_file`         | Apply targeted text patches to a file without replacing the entire content. Supports `replace_once`, `replace_all`, `insert_before`, and `insert_after` operations |
+| `delete_file`        | Delete a single file from a branch                                                                                                                                 |
 
 ### Pull Requests
 
-| Tool | Description |
-| ---- | ----------- |
-| `list_open_pull_requests` | List open pull requests for a repository |
-| `list_pull_requests` | List pull requests filtered by state (`open`, `closed`, `all`). Defaults to `open` |
-| `get_pull_request` | Get a pull request by number |
-| `list_pull_request_files` | List files changed in a pull request, including patches |
-| `list_pull_request_comments` | List inline and general comments on a pull request |
-| `get_pull_request_reviews` | List reviews submitted on a pull request |
-| `get_pull_request_diff` | Get the full unified diff for a pull request |
-| `create_pull_request` | Create a pull request |
-| `update_pull_request` | Update a pull request (title, body, state, base branch) |
+| Tool                         | Description                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `list_open_pull_requests`    | List open pull requests for a repository                                           |
+| `list_pull_requests`         | List pull requests filtered by state (`open`, `closed`, `all`). Defaults to `open` |
+| `get_pull_request`           | Get a pull request by number                                                       |
+| `list_pull_request_files`    | List files changed in a pull request, including patches                            |
+| `list_pull_request_comments` | List inline and general comments on a pull request                                 |
+| `get_pull_request_reviews`   | List reviews submitted on a pull request                                           |
+| `get_pull_request_diff`      | Get the full unified diff for a pull request                                       |
+| `create_pull_request`        | Create a pull request                                                              |
+| `update_pull_request`        | Update a pull request (title, body, state, base branch)                            |
 
 ### Issues
 
-| Tool | Description |
-| ---- | ----------- |
-| `list_issues` | List issues for a repository, filtered by state (`open`, `closed`, `all`). Excludes pull requests |
-| `get_issue` | Get a single issue by number |
-| `create_issue` | Create a new issue |
-| `update_issue` | Update an existing issue (title, body, state, labels, assignees) |
+| Tool                         | Description                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `list_issues`                | List issues for a repository, filtered by state (`open`, `closed`, `all`). Excludes pull requests                      |
+| `get_issue`                  | Get a single issue by number                                                                                           |
+| `create_issue`               | Create a new issue                                                                                                     |
+| `update_issue`               | Update an existing issue (title, body, state, labels, assignees)                                                       |
 | `link_issue_to_pull_request` | Link an issue to a PR using a closing keyword (`closes`/`fixes`/`resolves`). GitHub will auto-close the issue on merge |
-| `list_issue_comments` | List all comments on an issue |
-| `add_issue_comment` | Post a comment on an issue |
+| `list_issue_comments`        | List all comments on an issue                                                                                          |
+| `add_issue_comment`          | Post a comment on an issue                                                                                             |
 
 ### Commits
 
-| Tool | Description |
-| ---- | ----------- |
-| `list_commits` | List commits for a repository, optionally filtered by branch or file path |
-| `get_commit` | Get full commit detail by SHA or ref, including changed files and diff stats |
+| Tool           | Description                                                                  |
+| -------------- | ---------------------------------------------------------------------------- |
+| `list_commits` | List commits for a repository, optionally filtered by branch or file path    |
+| `get_commit`   | Get full commit detail by SHA or ref, including changed files and diff stats |
 
 ### Search
 
-| Tool | Description |
-| ---- | ----------- |
-| `search_code` | Search for code within a repository — returns file paths and match fragments |
+| Tool           | Description                                                                   |
+| -------------- | ----------------------------------------------------------------------------- |
+| `search_code`  | Search for code within a repository — returns file paths and match fragments  |
 | `search_files` | Search for files by name or path pattern using the git tree (no query limits) |
 
 ## Getting started
@@ -112,11 +112,11 @@ The server starts on `http://localhost:3000` by default (configurable via `PORT`
 
 ### Environment variables
 
-| Variable | Required | Description |
-| -------- | -------- | ----------- |
-| `GITHUB_PAT` | ✅ | GitHub Personal Access Token |
-| `CONNECTOR_SECRET` | ✅ | Shared secret used to authenticate requests to the bridge. Minimum 32 characters — generate with `openssl rand -hex 32`. Supports comma-separated list for zero-downtime rotation |
-| `PORT` | ✗ | HTTP port (default: `3000`) |
+| Variable           | Required | Description                                                                                                                                                                       |
+| ------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_PAT`       | ✅       | GitHub Personal Access Token                                                                                                                                                      |
+| `CONNECTOR_SECRET` | ✅       | Shared secret used to authenticate requests to the bridge. Minimum 32 characters — generate with `openssl rand -hex 32`. Supports comma-separated list for zero-downtime rotation |
+| `PORT`             | ✗        | HTTP port (default: `3000`)                                                                                                                                                       |
 
 ## Deploying
 
@@ -173,11 +173,11 @@ curl -s -X POST http://localhost:3000 \
 
 Configure your MCP client with:
 
-| Setting | Value |
-| ------- | ----- |
-| **URL** | Your deployment URL |
-| **Auth type** | Bearer token / API key |
-| **Secret** | Your `CONNECTOR_SECRET` value |
+| Setting       | Value                         |
+| ------------- | ----------------------------- |
+| **URL**       | Your deployment URL           |
+| **Auth type** | Bearer token / API key        |
+| **Secret**    | Your `CONNECTOR_SECRET` value |
 
 The client can call `tools/list` at any time to discover all available tools and their input schemas dynamically.
 
@@ -228,13 +228,13 @@ The public splash page (`GET /`) is served with:
 
 ## Scripts
 
-| Command | Description |
-| ------- | ----------- |
-| `npm run dev` | Start dev server with hot-reload |
-| `npm run build` | Compile TypeScript to `dist/` |
-| `npm start` | Run compiled server from `dist/` |
-| `npm test` | Run all tests (unit + integration) |
-| `npm run test:unit` | Run unit tests only |
-| `npm run test:integration` | Run integration tests only |
-| `npm run typecheck` | Type-check without emitting |
-| `npm run format` | Format code with Prettier |
+| Command                    | Description                        |
+| -------------------------- | ---------------------------------- |
+| `npm run dev`              | Start dev server with hot-reload   |
+| `npm run build`            | Compile TypeScript to `dist/`      |
+| `npm start`                | Run compiled server from `dist/`   |
+| `npm test`                 | Run all tests (unit + integration) |
+| `npm run test:unit`        | Run unit tests only                |
+| `npm run test:integration` | Run integration tests only         |
+| `npm run typecheck`        | Type-check without emitting        |
+| `npm run format`           | Format code with Prettier          |
