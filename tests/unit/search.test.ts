@@ -36,6 +36,15 @@ function makeCodeSearchResult(items: { path: string; name: string }[]) {
   };
 }
 
+/**
+ * searchCode
+ *
+ * Uses the GitHub code search API to find files containing a query string
+ * within a specific repository. The query is automatically scoped with
+ * repo:owner/repo. text_matches fragments are flattened to an array of
+ * strings for each result item. Returns total_count, incomplete_results,
+ * and a mapped items array.
+ */
 describe("searchCode", () => {
   /**
    * Happy path — returns mapped items with matches flattened to fragment strings.
@@ -103,6 +112,15 @@ describe("searchCode", () => {
   });
 });
 
+/**
+ * searchFiles
+ *
+ * Searches the full git tree for files whose paths contain the given pattern
+ * (case-insensitive). Uses the recursive git trees API rather than the code
+ * search API, so there are no rate-limit concerns. Directories are excluded
+ * from results. Propagates the truncated flag from GitHub when the tree
+ * exceeds the API's object limit.
+ */
 describe("searchFiles", () => {
   /**
    * Pattern matching — only paths containing the pattern should be returned.
