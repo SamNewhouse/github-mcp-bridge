@@ -116,6 +116,24 @@ export async function getFileContents(
   };
 }
 
+export async function getFileRaw(
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string,
+) {
+  const file = await githubRequest<GitHubContentFile>(
+    `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
+    { owner },
+  );
+
+  if (file.type !== "file") {
+    throw new AppError(`Path is not a file: ${path}`, 400);
+  }
+
+  return decodeFileContent(file);
+}
+
 export type PaginatedFilesResult = {
   files: Awaited<ReturnType<typeof getFileContents>>[];
   pagination: {
@@ -360,6 +378,127 @@ function applyPatchOp(content: string, op: PatchOp): string {
 }
 
 export async function patchFile(
+// ── batch_upsert_files / create_commit ────────────────────────────────────────
+
+type GitHubTreeBlob = {
+  sha: string;
+};
+
+type GitHubTreeResponse = {
+  sha: string;
+  url: string;
+};
+
+type GitHubCommitResponse = {
+  sha: string;
+  html_url: string;
+  message: string;
+};
+
+type GitHubRefUpdateResponse = {
+  ref: string;
+  object: { sha: string };
+};
+
+export type BatchUpsertEntry = {
+  path: string;
+  content: string;
+};
+
+export async function batchUpsertFiles(
+  owner: string,
+  repo: string,
+  input: {
+    branch: string;
+    message: string;
+    files: BatchUpsertEntry[];
+  },
+) {
+  // 1. Resolve the current tip SHA for the branch.
+  const refData = await githubRequest<{ object: { sha: string } }>(
+    `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`,
+    { owner },
+  );
+  const baseSha = refData.object.sha;
+
+  // 2. Create a blob for every file.
+  const treeEntries = await Promise.all(
+    input.files.map(async (f) => {
+      const blob = await githubRequest<GitHubTreeBlob>(
+        `/repos/${owner}/${repo}/git/blobs`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: Buffer.from(f.content, "utf8").toString("base64"),
+            encoding: "base64",
+          }),
+          owner,
+        },
+      );
+      return {
+        path: f.path,
+        mode: "100644" as const,
+        type: "blob" as const,
+        sha: blob.sha,
+      };
+    }),
+  );
+
+  // 3. Build a new tree on top of the current tree.
+  const tree = await githubRequest<GitHubTreeResponse>(
+    `/repos/${owner}/${repo}/git/trees`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base_tree: baseSha, tree: treeEntries }),
+      owner,
+    },
+  );
+
+  // 4. Create a commit pointing at the new tree.
+  const commit = await githubRequest<GitHubCommitResponse>(
+    `/repos/${owner}/${repo}/git/commits`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: input.message,
+        tree: tree.sha,
+        parents: [baseSha],
+      }),
+      owner,
+    },
+  );
+
+  // 5. Advance the branch ref to the new commit.
+  await githubRequest<GitHubRefUpdateResponse>(
+    `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sha: commit.sha }),
+      owner,
+    },
+  );
+
+  return {
+    commit: {
+      sha: commit.sha,
+      html_url: commit.html_url,
+      message: commit.message,
+    },
+    filesCommitted: input.files.length,
+    branch: input.branch,
+  };
+}
+
+// createCommit is an alias for batchUpsertFiles using the Git Data API.
+// It gives callers an explicit "create a commit" mental model while sharing
+// the same implementation.
+export const createCommit = batchUpsertFiles;
+
+
   owner: string,
   repo: string,
   input: {
