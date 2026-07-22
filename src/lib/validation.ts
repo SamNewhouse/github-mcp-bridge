@@ -129,3 +129,69 @@ export const listCommitsInputSchema = repositoryInputSchema.extend({
 export const getBranchInputSchema = repositoryInputSchema.extend({
   branch: z.string().min(1, "branch is required"),
 });
+
+// ---------------------------------------------------------------------------
+// New: delete_file
+// ---------------------------------------------------------------------------
+export const deleteFileInputSchema = repositoryInputSchema.extend({
+  path: z.string().min(1, "path is required"),
+  branch: z.string().min(1, "branch is required"),
+  message: z.string().min(1, "message is required"),
+});
+
+// ---------------------------------------------------------------------------
+// New: patch_file
+// ---------------------------------------------------------------------------
+const replaceOncePatchSchema = z.object({
+  op: z.literal("replace_once"),
+  find: z.string().min(1, "find is required"),
+  replace: z.string(),
+});
+
+const replaceAllPatchSchema = z.object({
+  op: z.literal("replace_all"),
+  find: z.string().min(1, "find is required"),
+  replace: z.string(),
+});
+
+const insertBeforePatchSchema = z.object({
+  op: z.literal("insert_before"),
+  anchor: z.string().min(1, "anchor is required"),
+  content: z.string(),
+});
+
+const insertAfterPatchSchema = z.object({
+  op: z.literal("insert_after"),
+  anchor: z.string().min(1, "anchor is required"),
+  content: z.string(),
+});
+
+export const patchOpSchema = z.discriminatedUnion("op", [
+  replaceOncePatchSchema,
+  replaceAllPatchSchema,
+  insertBeforePatchSchema,
+  insertAfterPatchSchema,
+]);
+
+export type PatchOp = z.infer<typeof patchOpSchema>;
+
+export const patchFileInputSchema = repositoryInputSchema.extend({
+  path: z.string().min(1, "path is required"),
+  branch: z.string().min(1, "branch is required"),
+  message: z.string().min(1, "message is required"),
+  patches: z
+    .array(patchOpSchema)
+    .min(1, "at least one patch is required"),
+});
+
+// ---------------------------------------------------------------------------
+// New: list_pull_requests
+// ---------------------------------------------------------------------------
+export const listPullRequestsInputSchema = repositoryInputSchema.extend({
+  state: z.enum(["open", "closed", "all"]).default("open"),
+});
+
+// ---------------------------------------------------------------------------
+// New: get_pull_request_reviews
+// ---------------------------------------------------------------------------
+export const getPullRequestReviewsInputSchema = pullRequestInputSchema;
