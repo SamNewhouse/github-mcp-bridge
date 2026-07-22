@@ -50,9 +50,6 @@ beforeEach(() => {
   mockGithubRequest.mockReset();
 });
 
-// ---------------------------------------------------------------------------
-// getFileContents
-// ---------------------------------------------------------------------------
 describe("getFileContents", () => {
   /**
    * Happy path — a normal file well within the 3.5 MB budget.
@@ -139,9 +136,6 @@ describe("getFileContents", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getMultipleFiles
-// ---------------------------------------------------------------------------
 describe("getMultipleFiles", () => {
   const paths = [
     "src/a.ts",
@@ -256,9 +250,6 @@ describe("getMultipleFiles", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listDirectory
-// ---------------------------------------------------------------------------
 describe("listDirectory", () => {
   /**
    * Happy path — GitHub returns an array of entries for a directory.
@@ -342,9 +333,6 @@ describe("listDirectory", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// upsertFile
-// ---------------------------------------------------------------------------
 describe("upsertFile", () => {
   const upsertInput = {
     path: "src/new-file.ts",
@@ -476,9 +464,6 @@ describe("upsertFile", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deleteFile
-// ---------------------------------------------------------------------------
 describe("deleteFile", () => {
   const deleteInput = {
     path: "src/old-file.ts",
@@ -567,9 +552,6 @@ describe("deleteFile", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// patchFile
-// ---------------------------------------------------------------------------
 describe("patchFile", () => {
   const patchInput = {
     path: "src/config.ts",
