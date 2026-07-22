@@ -30,6 +30,27 @@ export function getGithubPat(): string {
   return getEnv().GITHUB_PAT;
 }
 
+/**
+ * Returns the GitHub PAT to use for a given owner (user or organisation).
+ *
+ * Resolution order:
+ *   1. GITHUB_PAT_<OWNER> — owner-specific PAT, where <OWNER> is the GitHub
+ *      username or org name uppercased with hyphens replaced by underscores.
+ *      e.g. owner "my-org" → GITHUB_PAT_MY_ORG
+ *   2. GITHUB_PAT — the default fallback PAT.
+ *
+ * This lets you add as many GITHUB_PAT_* variables as you need without any
+ * other configuration changes.
+ */
+export function getGithubPatForOwner(owner: string): string {
+  const key = `GITHUB_PAT_${owner.toUpperCase().replace(/-/g, "_")}`;
+  const pat = process.env[key]?.trim();
+  if (pat && pat.length > 0) {
+    return pat;
+  }
+  return getEnv().GITHUB_PAT;
+}
+
 export function getConnectorSecret(): string {
   return getEnv().CONNECTOR_SECRET;
 }
