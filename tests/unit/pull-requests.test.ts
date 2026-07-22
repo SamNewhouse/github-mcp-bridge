@@ -42,9 +42,6 @@ function makePR(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// listOpenPullRequests
-// ---------------------------------------------------------------------------
 describe("listOpenPullRequests", () => {
   /**
    * Return shape — verifies the summary fields returned for each PR.
@@ -65,7 +62,6 @@ describe("listOpenPullRequests", () => {
       head: "feat/foo",
       base: "main",
     });
-    // Summary list must not include heavy fields
     expect(result[0]).not.toHaveProperty("body");
     expect(result[0]).not.toHaveProperty("mergeable");
   });
@@ -109,9 +105,6 @@ describe("listOpenPullRequests", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listPullRequests
-// ---------------------------------------------------------------------------
 describe("listPullRequests", () => {
   /**
    * Default state — calling without a state argument defaults to "open".
@@ -200,9 +193,6 @@ describe("listPullRequests", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getPullRequest
-// ---------------------------------------------------------------------------
 describe("getPullRequest", () => {
   /**
    * Happy path — returns full detail including body, mergeable, and stats.
@@ -259,9 +249,6 @@ describe("getPullRequest", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getPullRequestDiff
-// ---------------------------------------------------------------------------
 describe("getPullRequestDiff", () => {
   /**
    * Happy path — returns pullNumber and the raw unified diff string.
@@ -321,9 +308,6 @@ describe("getPullRequestDiff", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listPullRequestComments
-// ---------------------------------------------------------------------------
 describe("listPullRequestComments", () => {
   /**
    * Return shape — verifies each comment is mapped correctly.
@@ -390,9 +374,6 @@ describe("listPullRequestComments", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getPullRequestReviews
-// ---------------------------------------------------------------------------
 describe("getPullRequestReviews", () => {
   function makeReview(overrides: Partial<Record<string, unknown>> = {}) {
     return {
@@ -507,9 +488,6 @@ describe("getPullRequestReviews", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// updatePullRequest
-// ---------------------------------------------------------------------------
 describe("updatePullRequest", () => {
   /**
    * Empty payload guard — mirrors updateIssue behaviour.
@@ -567,9 +545,6 @@ describe("updatePullRequest", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// createPullRequest
-// ---------------------------------------------------------------------------
 describe("createPullRequest", () => {
   /**
    * Happy path — all required fields supplied.
@@ -590,7 +565,7 @@ describe("createPullRequest", () => {
     expect(payload.title).toBe("My PR");
     expect(payload.head).toBe("feat/foo");
     expect(payload.base).toBe("main");
-    expect(payload.body).toBe(""); // defaults to empty string
+    expect(payload.body).toBe("");
     expect(result.number).toBe(10);
   });
 
@@ -633,9 +608,6 @@ describe("createPullRequest", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listPullRequestFiles
-// ---------------------------------------------------------------------------
 describe("listPullRequestFiles", () => {
   function makeFile(filename: string) {
     return {
