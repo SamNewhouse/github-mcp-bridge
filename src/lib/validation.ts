@@ -185,3 +185,47 @@ export const listPullRequestsInputSchema = repositoryInputSchema.extend({
 
 // New: get_pull_request_reviews
 export const getPullRequestReviewsInputSchema = pullRequestInputSchema;
+// New: get_file_raw
+export const getFileRawInputSchema = repositoryInputSchema.extend({
+  path: z.string().min(1, "path is required"),
+  ref: z.string().min(1).optional(),
+});
+
+// New: batch_upsert_files / create_commit
+const batchUpsertEntrySchema = z.object({
+  path: z.string().min(1, "path is required"),
+  content: z.string(),
+});
+
+export const batchUpsertFilesInputSchema = repositoryInputSchema.extend({
+  branch: z.string().min(1, "branch is required"),
+  message: z.string().min(1, "message is required"),
+  files: z
+    .array(batchUpsertEntrySchema)
+    .min(1, "at least one file is required"),
+});
+
+// create_commit shares the same schema as batch_upsert_files
+export const createCommitInputSchema = batchUpsertFilesInputSchema;
+
+// New: add_pull_request_comment
+export const addPullRequestCommentInputSchema = pullRequestInputSchema.extend({
+  body: z.string().min(1, "body is required"),
+});
+
+// New: list_workflow_runs
+export const listWorkflowRunsInputSchema = repositoryInputSchema.extend({
+  branch: z.string().min(1).optional(),
+  event: z.string().min(1).optional(),
+  status: z.string().min(1).optional(),
+  perPage: z.coerce.number().int().positive().max(100).default(30),
+});
+
+// New: get_workflow_run
+export const getWorkflowRunInputSchema = repositoryInputSchema.extend({
+  runId: z.coerce.number().int().positive(),
+});
+
+// New: get_repository
+export const getRepositoryInputSchema = repositoryInputSchema;
+
