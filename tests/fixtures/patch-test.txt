@@ -1,1 +1,1 @@
-foo bar foo baz foo
+qux bar qux baz qux
