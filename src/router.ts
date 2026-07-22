@@ -1,6 +1,12 @@
 import * as http from "node:http";
 import { z } from "zod";
 import { assertAuthorized } from "./auth";
+import {
+  getClientIp,
+  isRateLimited,
+  recordAuthFailure,
+  recordAuthSuccess,
+} from "./lib/rateLimit";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
 import {
   getRequestUrl,
@@ -76,6 +82,13 @@ function sendSplashPage(res: http.ServerResponse): void {
   const html = getSplashHtml(getToolList().length);
   res.statusCode = 200;
   res.setHeader("content-type", "text/html; charset=utf-8");
+  res.setHeader(
+    "content-security-policy",
+    "default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; script-src 'none'",
+  );
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("x-frame-options", "DENY");
+  res.setHeader("referrer-policy", "no-referrer");
   res.end(html);
 }
 
@@ -100,12 +113,26 @@ export async function handleMcpRequest(
     }
 
     if (url.pathname === "/health") {
+      try {
+        assertAuthorized(req, log);
+      } catch {
+        return sendJson(res, 401, { error: "Unauthorized" });
+      }
+
       log.info("health_check_ok", { path: url.pathname });
       return sendJson(res, 200, { ok: true });
     }
 
     // HEAD / — some MCP clients probe before connecting
     if (url.pathname === "/" && req.method === "HEAD") {
+      try {
+        assertAuthorized(req, log);
+      } catch {
+        res.statusCode = 401;
+        res.end();
+        return;
+      }
+
       res.statusCode = 200;
       res.end();
       return;
@@ -129,9 +156,22 @@ export async function handleMcpRequest(
       return sendJson(res, 404, { error: "Not found" });
     }
 
+    const clientIp = getClientIp(req);
+
+    if (isRateLimited(clientIp)) {
+      log.warn("authorization_rate_limited", {
+        method: req.method ?? null,
+        url: req.url ?? null,
+        ip: clientIp,
+      });
+      return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Too many failed attempts — try again later");
+    }
+
     try {
       assertAuthorized(req, log);
+      recordAuthSuccess(clientIp);
     } catch {
+      recordAuthFailure(clientIp);
       return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Unauthorized");
     }
 
@@ -154,9 +194,6 @@ export async function handleMcpRequest(
     }
 
     const rawBody = await readJsonBody(req);
-
-    log.info("jsonrpc_raw_body", { rawBody });
-
     const parsed = jsonRpcRequestSchema.safeParse(rawBody);
 
     if (!parsed.success) {

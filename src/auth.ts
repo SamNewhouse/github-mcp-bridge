@@ -1,5 +1,6 @@
+import * as crypto from "node:crypto";
 import * as http from "node:http";
-import { getConnectorSecret } from "./config";
+import { getConnectorSecrets } from "./config";
 import { AppError } from "./lib/errors";
 import type { createRequestLogger } from "./lib/logging";
 
@@ -32,6 +33,19 @@ function getApiKeyHeader(header: string | string[] | undefined): string | null {
   return null;
 }
 
+/**
+ * Constant-time string equality check to prevent timing side-channel attacks.
+ * Returns false immediately if lengths differ (length is not secret), then
+ * compares bytes in constant time using crypto.timingSafeEqual.
+ */
+function secretsEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
 export function assertAuthorized(
   req: http.IncomingMessage,
   log?: RequestLogger,
@@ -40,7 +54,6 @@ export function assertAuthorized(
   const bearerToken = getBearerToken(authHeader);
   const apiKey = getApiKeyHeader(req.headers["x-api-key"]);
   const providedSecret = bearerToken ?? apiKey;
-  const expectedSecret = getConnectorSecret();
 
   if (!providedSecret) {
     log?.warn("authorization_missing", {
@@ -53,7 +66,15 @@ export function assertAuthorized(
     throw new AppError("Unauthorized", 401);
   }
 
-  if (providedSecret !== expectedSecret) {
+  // Support rotation: CONNECTOR_SECRET may be a comma-separated list of valid
+  // secrets (e.g. "newSecret,oldSecret"). A request is authorized if it matches
+  // any of them. Remove the old secret once all clients have rotated.
+  const validSecrets = getConnectorSecrets();
+  const isAuthorized = validSecrets.some((expected) =>
+    secretsEqual(providedSecret, expected),
+  );
+
+  if (!isAuthorized) {
     log?.warn("authorization_invalid", {
       method: req.method ?? null,
       url: req.url ?? null,

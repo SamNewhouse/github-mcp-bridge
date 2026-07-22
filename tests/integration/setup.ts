@@ -8,12 +8,18 @@ config();
 
 export default async function globalSetup() {
   const port = process.env.PORT ?? "3000";
+  const connectorSecret = process.env.CONNECTOR_SECRET;
+
+  if (!connectorSecret) {
+    throw new Error("[setup] CONNECTOR_SECRET is required");
+  }
 
   // Build first so dist/server.js is guaranteed to exist before spawning.
   const build = spawnSync("npm run build", {
     shell: true,
     stdio: "inherit",
   });
+
   if (build.status !== 0) {
     throw new Error("[setup] Build failed — cannot start integration server");
   }
@@ -39,7 +45,12 @@ export default async function globalSetup() {
 
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${connectorSecret}`,
+        },
+      });
+
       if (res.ok) {
         console.log(`[setup] Server ready on port ${port}`);
         return;
@@ -47,6 +58,7 @@ export default async function globalSetup() {
     } catch {
       // Not ready yet
     }
+
     await setTimeout(200);
   }
 
