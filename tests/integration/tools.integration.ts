@@ -41,6 +41,13 @@ async function callToolRaw(name: string, input: Record<string, unknown>) {
   return res.json();
 }
 
+/**
+ * list_repositories (integration)
+ *
+ * Verifies the tool returns a non-empty list of repositories accessible to
+ * the configured PAT, with the expected mapped fields. Also confirms that
+ * unauthenticated requests are rejected with error code -32001.
+ */
 describe("list_repositories (integration)", () => {
   it("returns a non-empty array of repositories with expected fields", async () => {
     const result = await callTool("list_repositories", {});
@@ -69,6 +76,13 @@ describe("list_repositories (integration)", () => {
   });
 });
 
+/**
+ * list_branches (integration)
+ *
+ * Verifies the tool returns branches with the correct mapped fields
+ * (name, sha, protected) for the target repo. Also confirms that a
+ * request missing the required repo field is rejected with an error.
+ */
 describe("list_branches (integration)", () => {
   it("returns branches with name, sha, and protected fields", async () => {
     const result = await callTool("list_branches", { owner: OWNER, repo: REPO });
@@ -86,6 +100,13 @@ describe("list_branches (integration)", () => {
   });
 });
 
+/**
+ * get_branch (integration)
+ *
+ * Verifies the tool returns full branch detail including latest_commit
+ * (message, author, date) for an existing branch. Also confirms that
+ * requesting a non-existent branch throws an error.
+ */
 describe("get_branch (integration)", () => {
   it("returns branch detail including latest_commit for main", async () => {
     const result = await callTool("get_branch", { owner: OWNER, repo: REPO, branch: "main" });
@@ -103,6 +124,13 @@ describe("get_branch (integration)", () => {
   });
 });
 
+/**
+ * list_open_pull_requests (integration)
+ *
+ * Verifies the tool returns an array of open PRs. When PRs exist, checks
+ * that each entry has the expected summary fields (number, title, head, base).
+ * The array may be empty if there are no open PRs at the time of the run.
+ */
 describe("list_open_pull_requests (integration)", () => {
   it("returns an array of open pull requests with expected fields", async () => {
     const result = await callTool("list_open_pull_requests", { owner: OWNER, repo: REPO });
@@ -117,6 +145,13 @@ describe("list_open_pull_requests (integration)", () => {
   });
 });
 
+/**
+ * list_pull_requests (integration)
+ *
+ * Verifies the tool returns PRs filtered by state. Uses state=all to
+ * guarantee a non-empty result. Confirms the full mapped shape including
+ * the draft field. Also verifies that an invalid state value is rejected.
+ */
 describe("list_pull_requests (integration)", () => {
   it("returns an array when state=all", async () => {
     const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
@@ -146,6 +181,13 @@ describe("list_pull_requests (integration)", () => {
   });
 });
 
+/**
+ * get_pull_request (integration)
+ *
+ * Verifies the tool returns full PR detail for a known PR number, including
+ * draft, headSha, additions, and deletions. Also confirms that requesting
+ * a non-existent PR number throws an error.
+ */
 describe("get_pull_request (integration)", () => {
   it("returns full PR detail with all mapped fields", async () => {
     const result = await callTool("get_pull_request", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -163,6 +205,13 @@ describe("get_pull_request (integration)", () => {
   });
 });
 
+/**
+ * get_pull_request_diff (integration)
+ *
+ * Verifies the tool returns a non-empty raw unified diff string for a known
+ * PR, confirming the Accept header and responseType handling works end-to-end
+ * through the live server.
+ */
 describe("get_pull_request_diff (integration)", () => {
   it("returns a non-empty diff string for a known PR", async () => {
     const result = await callTool("get_pull_request_diff", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -172,6 +221,14 @@ describe("get_pull_request_diff (integration)", () => {
   });
 });
 
+/**
+ * get_pull_request_reviews (integration)
+ *
+ * Verifies the tool returns a reviews array for a known PR. When reviews
+ * exist, checks that each entry has the expected mapped fields (id, state,
+ * body, author, commit_id, submitted_at, html_url). Also confirms that
+ * requesting a non-existent PR number throws an error.
+ */
 describe("get_pull_request_reviews (integration)", () => {
   it("returns a reviews array for a known PR", async () => {
     const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -199,6 +256,13 @@ describe("get_pull_request_reviews (integration)", () => {
   });
 });
 
+/**
+ * list_pull_request_files (integration)
+ *
+ * Verifies the tool returns a files array and truncated flag for a known PR.
+ * When files exist, checks that each entry has the expected shape (path,
+ * status, additions, deletions, changes, blob_url).
+ */
 describe("list_pull_request_files (integration)", () => {
   it("returns files and truncated flag for a known PR", async () => {
     const result = await callTool("list_pull_request_files", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -221,6 +285,13 @@ describe("list_pull_request_files (integration)", () => {
   });
 });
 
+/**
+ * list_pull_request_comments (integration)
+ *
+ * Verifies the tool returns a comments array for a known PR. When comments
+ * exist, checks that each entry has the expected mapped fields (id, body,
+ * author, html_url, created_at, updated_at).
+ */
 describe("list_pull_request_comments (integration)", () => {
   it("returns a comments array for a known PR", async () => {
     const result = await callTool("list_pull_request_comments", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -246,6 +317,13 @@ describe("list_pull_request_comments (integration)", () => {
   });
 });
 
+/**
+ * list_issues (integration)
+ *
+ * Verifies the tool returns issues filtered by state, excluding pull
+ * requests. Confirms closed issues have state=closed. Also verifies
+ * that an invalid state value is rejected with an error.
+ */
 describe("list_issues (integration)", () => {
   it("returns open issues excluding pull requests", async () => {
     const result = await callTool("list_issues", { owner: OWNER, repo: REPO, state: "open" });
@@ -272,6 +350,13 @@ describe("list_issues (integration)", () => {
   });
 });
 
+/**
+ * get_issue (integration)
+ *
+ * Verifies the tool correctly rejects a PR number (GitHub returns issue-like
+ * data for PRs on the /issues endpoint) and throws for a non-existent issue
+ * number. Note: a positive happy-path test requires a known real issue number.
+ */
 describe("get_issue (integration)", () => {
   it("throws when the number belongs to a pull request", async () => {
     await expect(
@@ -286,6 +371,13 @@ describe("get_issue (integration)", () => {
   });
 });
 
+/**
+ * list_issue_comments (integration)
+ *
+ * Verifies the tool returns a comments array for a known issue/PR number,
+ * with each entry having the expected mapped fields. Also confirms that
+ * requesting a non-existent issue number throws an error.
+ */
 describe("list_issue_comments (integration)", () => {
   it("returns comments array for a known issue/PR number", async () => {
     const result = await callTool("list_issue_comments", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER });
@@ -304,6 +396,13 @@ describe("list_issue_comments (integration)", () => {
   });
 });
 
+/**
+ * get_commit (integration)
+ *
+ * Verifies the tool returns full commit detail (sha, message, stats, files)
+ * for a real commit SHA resolved from the main branch tip. Also confirms
+ * that an invalid/non-existent SHA throws an error.
+ */
 describe("get_commit (integration)", () => {
   it("returns commit detail with stats and files for a real commit SHA", async () => {
     const branch = await callTool("get_branch", { owner: OWNER, repo: REPO, branch: "main" });
@@ -322,6 +421,13 @@ describe("get_commit (integration)", () => {
   });
 });
 
+/**
+ * list_commits (integration)
+ *
+ * Verifies the tool returns recent commits with expected mapped fields
+ * (sha, message, author, date). Confirms branch and path filters are
+ * forwarded correctly, and that the perPage limit is respected.
+ */
 describe("list_commits (integration)", () => {
   it("returns recent commits with expected fields", async () => {
     const result = await callTool("list_commits", { owner: OWNER, repo: REPO, branch: "main", perPage: 5 });
@@ -346,6 +452,13 @@ describe("list_commits (integration)", () => {
   });
 });
 
+/**
+ * list_directory (integration)
+ *
+ * Verifies the tool returns directory entries with both file and dir types
+ * at the repo root, and only file entries for a known leaf directory.
+ * Also confirms that a non-existent path throws an error.
+ */
 describe("list_directory (integration)", () => {
   it("returns entries with file and dir types at the repo root", async () => {
     const result = await callTool("list_directory", { owner: OWNER, repo: REPO, path: "" });
@@ -370,6 +483,13 @@ describe("list_directory (integration)", () => {
   });
 });
 
+/**
+ * search_code (integration)
+ *
+ * Verifies the tool returns results with path and matches fragments for a
+ * query known to exist in the repo. Also confirms that a query guaranteed
+ * to match nothing returns total_count: 0 and an empty items array.
+ */
 describe("search_code (integration)", () => {
   it("returns results with path and matches for a known query", async () => {
     const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: "githubRequest" });
@@ -387,6 +507,14 @@ describe("search_code (integration)", () => {
   });
 });
 
+/**
+ * search_files (integration)
+ *
+ * Verifies the tool returns matching file paths for a known pattern and an
+ * empty result for a pattern that matches nothing. Confirms the ref parameter
+ * is forwarded correctly. Also verifies that a request missing the required
+ * pattern field is rejected with an error.
+ */
 describe("search_files (integration)", () => {
   it("returns matching files for a known path pattern", async () => {
     const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: ".integration", ref: "main" });
@@ -414,6 +542,13 @@ describe("search_files (integration)", () => {
   });
 });
 
+/**
+ * unknown tool (integration)
+ *
+ * Verifies the server returns a structured error response (not a crash)
+ * when a tool name that doesn't exist is called. This confirms the tool
+ * dispatcher handles unknown names gracefully.
+ */
 describe("unknown tool (integration)", () => {
   it("returns an error for an unknown tool name", async () => {
     const json = await callToolRaw("tool_that_does_not_exist", {});
