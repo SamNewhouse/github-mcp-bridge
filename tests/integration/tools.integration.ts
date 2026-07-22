@@ -622,10 +622,11 @@ describe("search_code (integration)", () => {
   });
 
   it("returns total_count: 0 and empty items for a query with no matches", async () => {
+    const noMatchQuery = ["zzq9", "x7m2", "k4w8"].join("_never_in_repo_");
     const result = await callTool("search_code", {
       owner: OWNER,
       repo: REPO,
-      query: "xyzzy_guaranteed_no_match_token_42",
+      query: noMatchQuery,
     });
 
     expect(result.results.total_count).toBe(0);
@@ -642,7 +643,7 @@ describe("search_files (integration)", () => {
       owner: OWNER,
       repo: REPO,
       pattern: ".integration",
-      ref: "feat/pagination",
+      ref: "main",
     });
 
     expect(result.results.total_matched).toBeGreaterThan(0);
