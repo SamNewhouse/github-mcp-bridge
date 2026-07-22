@@ -11,6 +11,8 @@ import {
   updatePullRequest,
   createPullRequest,
   getPullRequestDiff,
+  listPullRequests,
+  getPullRequestReviews,
 } from "../../src/github/pull-requests";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
@@ -104,6 +106,97 @@ describe("listOpenPullRequests", () => {
     const result = await listOpenPullRequests("owner", "repo");
 
     expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listPullRequests
+// ---------------------------------------------------------------------------
+describe("listPullRequests", () => {
+  /**
+   * Default state — calling without a state argument defaults to "open".
+   * Asserts the URL contains state=open.
+   */
+  it("defaults to state=open in the URL", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listPullRequests("owner", "repo");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("state=open");
+  });
+
+  /**
+   * state=all forwarded — asserts the encoded state param reaches the URL.
+   */
+  it("forwards state=all to the GitHub API URL", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listPullRequests("owner", "repo", "all");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("state=all");
+  });
+
+  /**
+   * state=closed forwarded.
+   */
+  it("forwards state=closed to the GitHub API URL", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listPullRequests("owner", "repo", "closed");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("state=closed");
+  });
+
+  /**
+   * Return shape — listPullRequests includes draft unlike listOpenPullRequests.
+   * Asserts draft is present in each mapped PR.
+   */
+  it("includes draft field in each mapped PR", async () => {
+    mock.mockResolvedValueOnce([makePR({ draft: false }), makePR({ draft: true, number: 11 })]);
+
+    const result = await listPullRequests("owner", "repo", "all");
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toHaveProperty("draft", false);
+    expect(result[1]).toHaveProperty("draft", true);
+  });
+
+  /**
+   * draft defaults to false — GitHub may omit draft on older PRs.
+   * Asserts the mapped result has draft: false (not undefined).
+   */
+  it("defaults draft to false when GitHub response omits the field", async () => {
+    mock.mockResolvedValueOnce([{ ...makePR(), draft: undefined }]);
+
+    const result = await listPullRequests("owner", "repo");
+
+    expect(result[0]!.draft).toBe(false);
+  });
+
+  /**
+   * Empty list — no PRs match the filter.
+   */
+  it("returns an empty array when there are no matching PRs", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    const result = await listPullRequests("owner", "repo", "closed");
+
+    expect(result).toEqual([]);
+  });
+
+  /**
+   * per_page=100 — asserts the request fetches up to 100 PRs per page.
+   */
+  it("requests up to 100 PRs per page", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await listPullRequests("owner", "repo");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=100");
   });
 });
 
@@ -292,6 +385,123 @@ describe("listPullRequestComments", () => {
     mock.mockResolvedValueOnce([]);
 
     const result = await listPullRequestComments("owner", "repo", 10);
+
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getPullRequestReviews
+// ---------------------------------------------------------------------------
+describe("getPullRequestReviews", () => {
+  function makeReview(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: 100,
+      state: "APPROVED",
+      body: "LGTM",
+      html_url: "https://github.com/owner/repo/pull/10#pullrequestreview-100",
+      submitted_at: "2026-01-01T00:00:00Z",
+      user: { login: "reviewer" },
+      commit_id: "deadbeef",
+      ...overrides,
+    };
+  }
+
+  /**
+   * Return shape — verifies each review is mapped to the expected fields.
+   * Asserts id, state, body, author, commit_id, submitted_at, html_url.
+   */
+  it("maps review fields correctly", async () => {
+    mock.mockResolvedValueOnce([makeReview()]);
+
+    const result = await getPullRequestReviews("owner", "repo", 10);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 100,
+      state: "APPROVED",
+      body: "LGTM",
+      author: "reviewer",
+      commit_id: "deadbeef",
+      submitted_at: "2026-01-01T00:00:00Z",
+    });
+    expect(result[0]).toHaveProperty("html_url");
+  });
+
+  /**
+   * Multiple reviews — PR with CHANGES_REQUESTED then APPROVED.
+   * Asserts all reviews are returned in order.
+   */
+  it("returns all reviews in the order GitHub returns them", async () => {
+    mock.mockResolvedValueOnce([
+      makeReview({ id: 1, state: "CHANGES_REQUESTED" }),
+      makeReview({ id: 2, state: "APPROVED" }),
+    ]);
+
+    const result = await getPullRequestReviews("owner", "repo", 10);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]!.state).toBe("CHANGES_REQUESTED");
+    expect(result[1]!.state).toBe("APPROVED");
+  });
+
+  /**
+   * submitted_at null — GitHub returns null for pending/dismissed reviews.
+   * Asserts null is preserved in the mapped output.
+   */
+  it("preserves submitted_at: null for pending reviews", async () => {
+    mock.mockResolvedValueOnce([makeReview({ submitted_at: null })]);
+
+    const result = await getPullRequestReviews("owner", "repo", 10);
+
+    expect(result[0]!.submitted_at).toBeNull();
+  });
+
+  /**
+   * Empty body — review with no description text.
+   * Asserts empty string body is preserved (not coerced to null).
+   */
+  it("preserves empty string body for reviews with no comment", async () => {
+    mock.mockResolvedValueOnce([makeReview({ body: "" })]);
+
+    const result = await getPullRequestReviews("owner", "repo", 10);
+
+    expect(result[0]!.body).toBe("");
+  });
+
+  /**
+   * Uses the correct reviews endpoint — asserts the URL calls
+   * /pulls/:pullNumber/reviews, not /issues/:pullNumber/comments.
+   */
+  it("fetches from the pulls reviews endpoint", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await getPullRequestReviews("owner", "repo", 10);
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("/pulls/10/reviews");
+  });
+
+  /**
+   * per_page=100 — asserts the request fetches up to 100 reviews per page.
+   */
+  it("requests up to 100 reviews per page", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    await getPullRequestReviews("owner", "repo", 10);
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("per_page=100");
+  });
+
+  /**
+   * Empty list — PR has no reviews.
+   * Asserts an empty array is returned without error.
+   */
+  it("returns an empty array when there are no reviews", async () => {
+    mock.mockResolvedValueOnce([]);
+
+    const result = await getPullRequestReviews("owner", "repo", 10);
 
     expect(result).toEqual([]);
   });
