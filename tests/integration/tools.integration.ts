@@ -18,8 +18,13 @@
 //     update_issue (live), create_issue (live), add_issue_comment (live),
 //     link_issue_to_pull_request (live).
 //
-// All mutation-tool coverage lives in tests/unit/mutation-tools.unit.ts using
-// jest.mock() — no real network calls are made there.
+// All mutation-tool coverage lives in mocked unit tests:
+//   - tests/unit/branches.test.ts      (createBranch)
+//   - tests/unit/files.test.ts         (upsertFile, patchFile, deleteFile)
+//   - tests/unit/issues.test.ts        (createIssue, updateIssue, addIssueComment,
+//                                       linkIssueToPullRequest)
+//   - tests/unit/pull-requests.test.ts (createPullRequest, updatePullRequest)
+// No real network calls are made in those files.
 // =============================================================================
 
 const BASE_URL = `http://localhost:${process.env.PORT ?? "3000"}`;
