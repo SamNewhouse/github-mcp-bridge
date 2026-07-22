@@ -25,9 +25,6 @@ function makeRepo(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// listRepositories
-// ---------------------------------------------------------------------------
 describe("listRepositories", () => {
   /**
    * Return shape — verifies all mapped fields are present and correctly
