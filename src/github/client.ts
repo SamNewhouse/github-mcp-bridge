@@ -1,4 +1,4 @@
-import { getGithubPat } from "../config";
+import { getGithubPatForOwner } from "../config";
 import { AppError } from "../lib/errors";
 import { logError, logInfo, logWarn } from "../lib/logging";
 
@@ -9,6 +9,8 @@ const MAX_RESPONSE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 type GithubRequestOptions = RequestInit & {
   responseType?: "json" | "text";
+  /** GitHub owner (user or org) used to select the correct PAT. */
+  owner?: string;
 };
 
 function mapGithubStatus(status: number, body: string): AppError {
@@ -53,6 +55,7 @@ export async function githubRequest<T>(
   const method = init.method ?? "GET";
   const headers = new Headers(init.headers);
   const responseType = init.responseType ?? "json";
+  const owner = init.owner ?? "";
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -60,7 +63,7 @@ export async function githubRequest<T>(
     headers.set("Accept", "application/vnd.github+json");
   }
 
-  headers.set("Authorization", `Bearer ${getGithubPat()}`);
+  headers.set("Authorization", `Bearer ${getGithubPatForOwner(owner)}`);
   headers.set("User-Agent", "github-mcp-bridge");
   headers.set("X-GitHub-Api-Version", GITHUB_API_VERSION);
 
