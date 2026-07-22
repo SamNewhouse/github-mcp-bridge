@@ -112,9 +112,6 @@ export async function listOpenPullRequests(owner: string, repo: string) {
   }));
 }
 
-// ---------------------------------------------------------------------------
-// New: list_pull_requests (supports state filtering)
-// ---------------------------------------------------------------------------
 export async function listPullRequests(
   owner: string,
   repo: string,
@@ -196,9 +193,6 @@ export async function listPullRequestComments(
   }));
 }
 
-// ---------------------------------------------------------------------------
-// New: get_pull_request_reviews
-// ---------------------------------------------------------------------------
 export async function getPullRequestReviews(
   owner: string,
   repo: string,
