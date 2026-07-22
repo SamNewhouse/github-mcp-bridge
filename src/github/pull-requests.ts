@@ -50,6 +50,18 @@ type GitHubConversationComment = {
   };
 };
 
+type GitHubPullRequestReview = {
+  id: number;
+  body: string;
+  state: string;
+  html_url: string;
+  submitted_at: string | null;
+  user: {
+    login: string;
+  };
+  commit_id: string;
+};
+
 type GitHubCreatePullRequestInput = {
   title: string;
   body?: string;
@@ -91,6 +103,32 @@ export async function listOpenPullRequests(owner: string, repo: string) {
     number: pr.number,
     title: pr.title,
     state: pr.state,
+    html_url: pr.html_url,
+    author: pr.user.login,
+    head: pr.head.ref,
+    base: pr.base.ref,
+    created_at: pr.created_at,
+    updated_at: pr.updated_at,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// New: list_pull_requests (supports state filtering)
+// ---------------------------------------------------------------------------
+export async function listPullRequests(
+  owner: string,
+  repo: string,
+  state: "open" | "closed" | "all" = "open",
+) {
+  const prs = await githubRequest<GitHubPullRequest[]>(
+    `/repos/${owner}/${repo}/pulls?state=${encodeURIComponent(state)}&per_page=100`,
+  );
+
+  return prs.map((pr) => ({
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    draft: pr.draft ?? false,
     html_url: pr.html_url,
     author: pr.user.login,
     head: pr.head.ref,
@@ -155,6 +193,29 @@ export async function listPullRequestComments(
     author: comment.user.login,
     created_at: comment.created_at,
     updated_at: comment.updated_at,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// New: get_pull_request_reviews
+// ---------------------------------------------------------------------------
+export async function getPullRequestReviews(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+) {
+  const reviews = await githubRequest<GitHubPullRequestReview[]>(
+    `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews?per_page=100`,
+  );
+
+  return reviews.map((review) => ({
+    id: review.id,
+    state: review.state,
+    body: review.body,
+    author: review.user.login,
+    commit_id: review.commit_id,
+    submitted_at: review.submitted_at,
+    html_url: review.html_url,
   }));
 }
 
