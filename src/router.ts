@@ -6,7 +6,7 @@ import {
   isRateLimited,
   recordAuthFailure,
   recordAuthSuccess,
-} from "./lib/rateLimit";
+} from "./lib/limiter";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
 import {
   getRequestUrl,
