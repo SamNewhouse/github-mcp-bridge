@@ -31,6 +31,18 @@ export function getConnectorSecret(): string {
   return getEnv().CONNECTOR_SECRET;
 }
 
+/**
+ * Returns all valid secrets as an array to support zero-downtime rotation.
+ * CONNECTOR_SECRET may be a comma-separated list (e.g. "newSecret,oldSecret").
+ * Each entry is trimmed and empty entries are discarded.
+ */
+export function getConnectorSecrets(): string[] {
+  return getEnv()
+    .CONNECTOR_SECRET.split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 export function getPort(): number {
   return getEnv().PORT;
 }
