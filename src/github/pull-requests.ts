@@ -37,7 +37,9 @@ type GitHubPullRequestFile = {
   raw_url: string;
 };
 
-type GitHubIssueComment = {
+// Conversation comments (issue-style, left on the PR timeline).
+// Inline review comments on specific lines live at /pulls/{pull_number}/comments.
+type GitHubConversationComment = {
   id: number;
   body: string;
   html_url: string;
@@ -55,6 +57,30 @@ type GitHubCreatePullRequestInput = {
   base: string;
   draft?: boolean;
 };
+
+// GitHub caps per_page at 100 — PRs with > 100 changed files will be truncated.
+const PR_FILES_PAGE_LIMIT = 100;
+
+function mapPullRequest(pr: GitHubPullRequest) {
+  return {
+    number: pr.number,
+    title: pr.title,
+    body: pr.body,
+    state: pr.state,
+    draft: pr.draft ?? false,
+    html_url: pr.html_url,
+    author: pr.user.login,
+    head: pr.head.ref,
+    headSha: pr.head.sha,
+    base: pr.base.ref,
+    created_at: pr.created_at,
+    updated_at: pr.updated_at,
+    mergeable: pr.mergeable ?? null,
+    additions: pr.additions ?? 0,
+    deletions: pr.deletions ?? 0,
+    changed_files: pr.changed_files ?? 0,
+  };
+}
 
 export async function listOpenPullRequests(owner: string, repo: string) {
   const prs = await githubRequest<GitHubPullRequest[]>(
@@ -83,24 +109,7 @@ export async function getPullRequest(
     `/repos/${owner}/${repo}/pulls/${pullNumber}`,
   );
 
-  return {
-    number: pr.number,
-    title: pr.title,
-    body: pr.body,
-    state: pr.state,
-    draft: pr.draft ?? false,
-    html_url: pr.html_url,
-    author: pr.user.login,
-    head: pr.head.ref,
-    headSha: pr.head.sha,
-    base: pr.base.ref,
-    created_at: pr.created_at,
-    updated_at: pr.updated_at,
-    mergeable: pr.mergeable ?? null,
-    additions: pr.additions ?? 0,
-    deletions: pr.deletions ?? 0,
-    changed_files: pr.changed_files ?? 0,
-  };
+  return mapPullRequest(pr);
 }
 
 export async function listPullRequestFiles(
@@ -109,19 +118,23 @@ export async function listPullRequestFiles(
   pullNumber: number,
 ) {
   const files = await githubRequest<GitHubPullRequestFile[]>(
-    `/repos/${owner}/${repo}/pulls/${pullNumber}/files?per_page=100`,
+    `/repos/${owner}/${repo}/pulls/${pullNumber}/files?per_page=${PR_FILES_PAGE_LIMIT}`,
   );
 
-  return files.map((file) => ({
-    path: file.filename,
-    status: file.status,
-    additions: file.additions,
-    deletions: file.deletions,
-    changes: file.changes,
-    patch: file.patch ?? null,
-    blob_url: file.blob_url,
-    raw_url: file.raw_url,
-  }));
+  return {
+    files: files.map((file) => ({
+      path: file.filename,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      changes: file.changes,
+      patch: file.patch ?? null,
+      blob_url: file.blob_url,
+      raw_url: file.raw_url,
+    })),
+    // If exactly 100 files are returned the PR may have more — treat as potentially incomplete.
+    truncated: files.length === PR_FILES_PAGE_LIMIT,
+  };
 }
 
 export async function listPullRequestComments(
@@ -129,7 +142,9 @@ export async function listPullRequestComments(
   repo: string,
   pullNumber: number,
 ) {
-  const comments = await githubRequest<GitHubIssueComment[]>(
+  // Returns conversation comments from the PR timeline (issue-style).
+  // Inline review comments on specific lines live at /pulls/${pullNumber}/comments.
+  const comments = await githubRequest<GitHubConversationComment[]>(
     `/repos/${owner}/${repo}/issues/${pullNumber}/comments?per_page=100`,
   );
 
@@ -176,24 +191,7 @@ export async function updatePullRequest(
     },
   );
 
-  return {
-    number: pr.number,
-    title: pr.title,
-    body: pr.body,
-    state: pr.state,
-    draft: pr.draft ?? false,
-    html_url: pr.html_url,
-    author: pr.user.login,
-    head: pr.head.ref,
-    headSha: pr.head.sha,
-    base: pr.base.ref,
-    created_at: pr.created_at,
-    updated_at: pr.updated_at,
-    mergeable: pr.mergeable ?? null,
-    additions: pr.additions ?? 0,
-    deletions: pr.deletions ?? 0,
-    changed_files: pr.changed_files ?? 0,
-  };
+  return mapPullRequest(pr);
 }
 
 export async function createPullRequest(
@@ -218,24 +216,7 @@ export async function createPullRequest(
     },
   );
 
-  return {
-    number: pr.number,
-    title: pr.title,
-    body: pr.body,
-    state: pr.state,
-    draft: pr.draft ?? false,
-    html_url: pr.html_url,
-    author: pr.user.login,
-    head: pr.head.ref,
-    headSha: pr.head.sha,
-    base: pr.base.ref,
-    created_at: pr.created_at,
-    updated_at: pr.updated_at,
-    mergeable: pr.mergeable ?? null,
-    additions: pr.additions ?? 0,
-    deletions: pr.deletions ?? 0,
-    changed_files: pr.changed_files ?? 0,
-  };
+  return mapPullRequest(pr);
 }
 
 export async function getPullRequestDiff(

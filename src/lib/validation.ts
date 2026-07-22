@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 // GitHub owner and repo names: alphanumeric, hyphens, underscores, dots.
-// Prevents path traversal and injection via these fields.
 const githubNameSchema = z
   .string()
   .min(1)
@@ -31,6 +30,8 @@ export const getMultipleFilesInputSchema = repositoryInputSchema.extend({
     .array(z.string().min(1, "path is required"))
     .min(1, "at least one path is required"),
   ref: z.string().min(1).optional(),
+  cursor: z.coerce.number().int().min(0).optional(),
+  pageSize: z.coerce.number().int().min(1).max(20).optional(),
 });
 
 export const listDirectoryInputSchema = repositoryInputSchema.extend({
@@ -48,11 +49,6 @@ export const updatePullRequestInputSchema = pullRequestInputSchema.extend({
   base: z.string().min(1).optional(),
   state: z.enum(["open", "closed"]).optional(),
 });
-
-export const createPullRequestCommentInputSchema =
-  pullRequestInputSchema.extend({
-    body: z.string().min(1, "body is required"),
-  });
 
 export const upsertFileInputSchema = repositoryInputSchema.extend({
   path: z.string().min(1, "path is required"),

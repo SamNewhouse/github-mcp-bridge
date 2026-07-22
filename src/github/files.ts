@@ -2,6 +2,10 @@ import { Buffer } from "node:buffer";
 import { AppError } from "../lib/errors";
 import { githubRequest } from "./client";
 
+// Keep each response comfortably under Vercel's 4.5 MB payload cap.
+// 3.5 MB leaves headroom for the JSON envelope and other response fields.
+const CONTENT_BYTE_BUDGET = 3.5 * 1024 * 1024;
+
 type GitHubContentFile = {
   type: "file";
   name: string;
@@ -49,6 +53,13 @@ function buildContentsPath(path: string, ref?: string): string {
   return `${basePath}${query}`;
 }
 
+function decodeFileContent(file: GitHubContentFile): string {
+  const normalized = file.content.replace(/\n/g, "");
+  return file.encoding === "base64"
+    ? Buffer.from(normalized, "base64").toString("utf8")
+    : file.content;
+}
+
 export async function getFileContents(
   owner: string,
   repo: string,
@@ -63,11 +74,27 @@ export async function getFileContents(
     throw new AppError(`Path is not a file: ${path}`, 400);
   }
 
-  const normalized = file.content.replace(/\n/g, "");
-  const content =
-    file.encoding === "base64"
-      ? Buffer.from(normalized, "base64").toString("utf8")
-      : file.content;
+  const content = decodeFileContent(file);
+  const byteLength = Buffer.byteLength(content, "utf8");
+
+  if (byteLength > CONTENT_BYTE_BUDGET) {
+    const truncatedContent = content.slice(
+      0,
+      // Slice by chars, not bytes — close enough for UTF-8 prose
+      Math.floor(CONTENT_BYTE_BUDGET),
+    );
+
+    return {
+      name: file.name,
+      path: file.path,
+      sha: file.sha,
+      size: file.size,
+      content: truncatedContent,
+      truncated: true,
+      truncatedAt: CONTENT_BYTE_BUDGET,
+      fullSizeBytes: byteLength,
+    };
+  }
 
   return {
     name: file.name,
@@ -75,18 +102,76 @@ export async function getFileContents(
     sha: file.sha,
     size: file.size,
     content,
+    truncated: false,
   };
 }
+
+export type PaginatedFilesResult = {
+  files: Awaited<ReturnType<typeof getFileContents>>[];
+  pagination: {
+    cursor: number;
+    pageSize: number;
+    total: number;
+    returned: number;
+    hasMore: boolean;
+    nextCursor: number | null;
+  };
+};
 
 export async function getMultipleFiles(
   owner: string,
   repo: string,
   paths: string[],
   ref?: string,
-) {
-  return Promise.all(
-    paths.map((path) => getFileContents(owner, repo, path, ref)),
-  );
+  cursor = 0,
+  pageSize = 10,
+): Promise<PaginatedFilesResult> {
+  // Deduplicate to avoid wasted GitHub API calls
+  const uniquePaths = [...new Set(paths)];
+
+  const total = uniquePaths.length;
+  const start = Math.min(cursor, total);
+  const end = Math.min(start + pageSize, total);
+  const page = uniquePaths.slice(start, end);
+
+  // Fetch files sequentially, accumulate byte count, stop if budget would be exceeded
+  const files: Awaited<ReturnType<typeof getFileContents>>[] = [];
+  let bytesUsed = 0;
+  let stoppedEarlyAt: number | null = null;
+
+  for (let i = 0; i < page.length; i++) {
+    const file = await getFileContents(owner, repo, page[i]!, ref);
+    const fileBytes = Buffer.byteLength(
+      typeof file.content === "string" ? file.content : "",
+      "utf8",
+    );
+
+    // Always include the first file even if it alone exceeds the budget —
+    // otherwise a single oversized file would loop forever returning nothing.
+    if (files.length > 0 && bytesUsed + fileBytes > CONTENT_BYTE_BUDGET) {
+      // Adding this file would exceed the budget — stop here and adjust cursor
+      stoppedEarlyAt = start + i;
+      break;
+    }
+
+    bytesUsed += fileBytes;
+    files.push(file);
+  }
+
+  const effectiveEnd = stoppedEarlyAt ?? end;
+  const hasMore = effectiveEnd < total;
+
+  return {
+    files,
+    pagination: {
+      cursor: start,
+      pageSize,
+      total,
+      returned: files.length,
+      hasMore,
+      nextCursor: hasMore ? effectiveEnd : null,
+    },
+  };
 }
 
 export async function listDirectory(
