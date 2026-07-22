@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "ignoreCommand": "git diff HEAD~1 --name-only | grep -qvE '^(tests|.github)/'",
   "rewrites": [
     { "source": "/", "destination": "/api/mcp" },
     { "source": "/health", "destination": "/api/health" }
