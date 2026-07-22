@@ -255,6 +255,28 @@ describe("list_pull_request_files (integration)", () => {
     expect(typeof result.files.truncated).toBe("boolean");
     expect(result.files.truncated).toBe(false);
   });
+
+  /**
+   * Response shape — each file entry has the expected mapped fields.
+   */
+  it("each file entry has the expected shape", async () => {
+    const result = await callTool("list_pull_request_files", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
+
+    expect(Array.isArray(result.files.files)).toBe(true);
+    if (result.files.files.length > 0) {
+      const file = result.files.files[0];
+      expect(file).toHaveProperty("path");
+      expect(file).toHaveProperty("status");
+      expect(file).toHaveProperty("additions");
+      expect(file).toHaveProperty("deletions");
+      expect(file).toHaveProperty("changes");
+      expect(file).toHaveProperty("blob_url");
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -277,6 +299,28 @@ describe("list_pull_request_comments (integration)", () => {
       expect(result.comments[0]).toHaveProperty("id");
       expect(result.comments[0]).toHaveProperty("body");
       expect(result.comments[0]).toHaveProperty("author");
+    }
+  });
+
+  /**
+   * Response shape — each comment has the full expected shape.
+   */
+  it("each comment has the expected response shape", async () => {
+    const result = await callTool("list_pull_request_comments", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
+
+    expect(Array.isArray(result.comments)).toBe(true);
+    if (result.comments.length > 0) {
+      const comment = result.comments[0];
+      expect(comment).toHaveProperty("id");
+      expect(comment).toHaveProperty("body");
+      expect(comment).toHaveProperty("author");
+      expect(comment).toHaveProperty("html_url");
+      expect(comment).toHaveProperty("created_at");
+      expect(comment).toHaveProperty("updated_at");
     }
   });
 });
@@ -846,5 +890,439 @@ describe("unknown tool (integration)", () => {
   it("returns an error for an unknown tool name", async () => {
     const json = await callToolRaw("tool_that_does_not_exist", {});
     expect(json.error).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// patch_file
+// ---------------------------------------------------------------------------
+describe("patch_file (integration)", () => {
+  const TEST_BRANCH = "feat/add-missing-github-mcp-tools";
+  const TEST_FILE = "tests/fixtures/patch-test.txt";
+
+  /** Helper: write a fresh known file on the test branch so patch tests are idempotent. */
+  async function resetPatchFixture(content: string) {
+    await callTool("upsert_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "chore: reset patch fixture",
+      content,
+    });
+  }
+
+  /**
+   * Validation — missing patches field.
+   */
+  it("rejects request with missing patches field", async () => {
+    const json = await callToolRaw("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test",
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * Validation — empty patches array.
+   */
+  it("rejects request with empty patches array", async () => {
+    const json = await callToolRaw("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test",
+      patches: [],
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * Validation — invalid patch op discriminant.
+   */
+  it("rejects request with an invalid patch op", async () => {
+    const json = await callToolRaw("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test",
+      patches: [{ op: "invalid_op", find: "x", replace: "y" }],
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * replace_once happy path.
+   */
+  it("replace_once replaces the first occurrence of a string", async () => {
+    await resetPatchFixture("hello world hello");
+
+    const result = await callTool("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test: replace_once",
+      patches: [{ op: "replace_once", find: "hello", replace: "goodbye" }],
+    });
+
+    expect(result.result.patched).toBe(true);
+    expect(result.result.patchesApplied).toBe(1);
+    expect(result.result.commit).toHaveProperty("sha");
+
+    // Verify file content changed correctly (first occurrence only).
+    const file = await callTool("get_file_contents", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      ref: TEST_BRANCH,
+    });
+    expect(file.file.content).toBe("goodbye world hello");
+  });
+
+  /**
+   * replace_all happy path.
+   */
+  it("replace_all replaces all occurrences of a string", async () => {
+    await resetPatchFixture("foo bar foo baz foo");
+
+    const result = await callTool("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test: replace_all",
+      patches: [{ op: "replace_all", find: "foo", replace: "qux" }],
+    });
+
+    expect(result.result.patched).toBe(true);
+
+    const file = await callTool("get_file_contents", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      ref: TEST_BRANCH,
+    });
+    expect(file.file.content).toBe("qux bar qux baz qux");
+  });
+
+  /**
+   * insert_before happy path.
+   */
+  it("insert_before inserts content before the anchor", async () => {
+    await resetPatchFixture("ANCHOR_TEXT end");
+
+    await callTool("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test: insert_before",
+      patches: [{ op: "insert_before", anchor: "ANCHOR_TEXT", content: "BEFORE_" }],
+    });
+
+    const file = await callTool("get_file_contents", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      ref: TEST_BRANCH,
+    });
+    expect(file.file.content).toBe("BEFORE_ANCHOR_TEXT end");
+  });
+
+  /**
+   * insert_after happy path.
+   */
+  it("insert_after inserts content after the anchor", async () => {
+    await resetPatchFixture("start ANCHOR_TEXT");
+
+    await callTool("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test: insert_after",
+      patches: [{ op: "insert_after", anchor: "ANCHOR_TEXT", content: "_AFTER" }],
+    });
+
+    const file = await callTool("get_file_contents", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      ref: TEST_BRANCH,
+    });
+    expect(file.file.content).toBe("start ANCHOR_TEXT_AFTER");
+  });
+
+  /**
+   * Missing anchor / find failure — replace_once with no match.
+   */
+  it("fails clearly when replace_once find text is missing", async () => {
+    await resetPatchFixture("some content here");
+
+    await expect(
+      callTool("patch_file", {
+        owner: OWNER,
+        repo: REPO,
+        path: TEST_FILE,
+        branch: TEST_BRANCH,
+        message: "test",
+        patches: [{ op: "replace_once", find: "NOT_PRESENT_XYZ", replace: "anything" }],
+      })
+    ).rejects.toThrow();
+  });
+
+  /**
+   * Missing anchor failure — insert_before with no match.
+   */
+  it("fails clearly when insert_before anchor is missing", async () => {
+    await resetPatchFixture("some content here");
+
+    await expect(
+      callTool("patch_file", {
+        owner: OWNER,
+        repo: REPO,
+        path: TEST_FILE,
+        branch: TEST_BRANCH,
+        message: "test",
+        patches: [{ op: "insert_before", anchor: "NOT_PRESENT_XYZ", content: "X" }],
+      })
+    ).rejects.toThrow();
+  });
+
+  /**
+   * Multiple patches applied in order.
+   */
+  it("applies multiple patches in sequence", async () => {
+    await resetPatchFixture("A B C");
+
+    await callTool("patch_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      branch: TEST_BRANCH,
+      message: "test: multiple patches",
+      patches: [
+        { op: "replace_once", find: "A", replace: "X" },
+        { op: "replace_once", find: "B", replace: "Y" },
+        { op: "replace_once", find: "C", replace: "Z" },
+      ],
+    });
+
+    const file = await callTool("get_file_contents", {
+      owner: OWNER,
+      repo: REPO,
+      path: TEST_FILE,
+      ref: TEST_BRANCH,
+    });
+    expect(file.file.content).toBe("X Y Z");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// delete_file
+// ---------------------------------------------------------------------------
+describe("delete_file (integration)", () => {
+  const TEST_BRANCH = "feat/add-missing-github-mcp-tools";
+
+  /**
+   * Validation — missing path.
+   */
+  it("rejects request with missing path field", async () => {
+    const json = await callToolRaw("delete_file", {
+      owner: OWNER,
+      repo: REPO,
+      branch: TEST_BRANCH,
+      message: "test",
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * Validation — missing branch.
+   */
+  it("rejects request with missing branch field", async () => {
+    const json = await callToolRaw("delete_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: "test.txt",
+      message: "test",
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * Validation — missing message.
+   */
+  it("rejects request with missing message field", async () => {
+    const json = await callToolRaw("delete_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: "test.txt",
+      branch: TEST_BRANCH,
+    });
+    expect(json.error).toBeDefined();
+  });
+
+  /**
+   * Not found — deleting a file that does not exist.
+   */
+  it("throws when attempting to delete a non-existent file", async () => {
+    await expect(
+      callTool("delete_file", {
+        owner: OWNER,
+        repo: REPO,
+        path: "this/path/does/not/exist/file.txt",
+        branch: TEST_BRANCH,
+        message: "test: delete non-existent file",
+      })
+    ).rejects.toThrow();
+  });
+
+  /**
+   * Happy path — create a temp file then delete it.
+   */
+  it("successfully deletes an existing file and returns commit details", async () => {
+    const tempPath = `tests/fixtures/delete-test-${Date.now()}.txt`;
+
+    // Create the temp file first.
+    await callTool("upsert_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: tempPath,
+      branch: TEST_BRANCH,
+      message: "chore: create temp file for delete test",
+      content: "temporary content",
+    });
+
+    // Now delete it.
+    const result = await callTool("delete_file", {
+      owner: OWNER,
+      repo: REPO,
+      path: tempPath,
+      branch: TEST_BRANCH,
+      message: "test: delete temp file",
+    });
+
+    expect(result.result.deleted).toBe(true);
+    expect(result.result.path).toBe(tempPath);
+    expect(result.result.commit).toHaveProperty("sha");
+    expect(result.result.commit).toHaveProperty("html_url");
+    expect(result.result.commit).toHaveProperty("message");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// list_pull_requests
+// ---------------------------------------------------------------------------
+describe("list_pull_requests (integration)", () => {
+  /**
+   * Returns an array — state=all should include at least PR #1.
+   */
+  it("returns an array when state=all", async () => {
+    const result = await callTool("list_pull_requests", {
+      owner: OWNER,
+      repo: REPO,
+      state: "all",
+    });
+
+    expect(Array.isArray(result.pull_requests)).toBe(true);
+    expect(result.pull_requests.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Each PR has the expected mapped fields.
+   */
+  it("each PR has the expected mapped fields", async () => {
+    const result = await callTool("list_pull_requests", {
+      owner: OWNER,
+      repo: REPO,
+      state: "all",
+    });
+
+    expect(Array.isArray(result.pull_requests)).toBe(true);
+    for (const pr of result.pull_requests) {
+      expect(pr).toHaveProperty("number");
+      expect(pr).toHaveProperty("title");
+      expect(pr).toHaveProperty("state");
+      expect(pr).toHaveProperty("draft");
+      expect(pr).toHaveProperty("html_url");
+      expect(pr).toHaveProperty("author");
+      expect(pr).toHaveProperty("head");
+      expect(pr).toHaveProperty("base");
+      expect(pr).toHaveProperty("created_at");
+      expect(pr).toHaveProperty("updated_at");
+    }
+  });
+
+  /**
+   * Invalid state rejects with validation error.
+   */
+  it("rejects an invalid state value", async () => {
+    const json = await callToolRaw("list_pull_requests", {
+      owner: OWNER,
+      repo: REPO,
+      state: "invalid",
+    });
+    expect(json.error).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// get_pull_request_reviews
+// ---------------------------------------------------------------------------
+describe("get_pull_request_reviews (integration)", () => {
+  /**
+   * Known PR returns reviews array (may be empty for PR #1 — that's fine).
+   */
+  it("returns a reviews array for a known PR", async () => {
+    const result = await callTool("get_pull_request_reviews", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
+
+    expect(Array.isArray(result.reviews)).toBe(true);
+  });
+
+  /**
+   * Response shape — each review has the expected mapped fields.
+   */
+  it("each review has the expected response shape", async () => {
+    const result = await callTool("get_pull_request_reviews", {
+      owner: OWNER,
+      repo: REPO,
+      pullNumber: KNOWN_PR_NUMBER,
+    });
+
+    expect(Array.isArray(result.reviews)).toBe(true);
+    if (result.reviews.length > 0) {
+      const review = result.reviews[0];
+      expect(review).toHaveProperty("id");
+      expect(review).toHaveProperty("state");
+      expect(review).toHaveProperty("body");
+      expect(review).toHaveProperty("author");
+      expect(review).toHaveProperty("commit_id");
+      expect(review).toHaveProperty("submitted_at");
+      expect(review).toHaveProperty("html_url");
+    }
+  });
+
+  /**
+   * Non-existent PR throws.
+   */
+  it("throws for a non-existent pull request number", async () => {
+    await expect(
+      callTool("get_pull_request_reviews", {
+        owner: OWNER,
+        repo: REPO,
+        pullNumber: 999999,
+      })
+    ).rejects.toThrow();
   });
 });
