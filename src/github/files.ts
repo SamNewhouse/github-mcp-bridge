@@ -264,9 +264,6 @@ export async function upsertFile(
   };
 }
 
-// ---------------------------------------------------------------------------
-// delete_file
-// ---------------------------------------------------------------------------
 export async function deleteFile(
   owner: string,
   repo: string,
@@ -308,10 +305,6 @@ export async function deleteFile(
     },
   };
 }
-
-// ---------------------------------------------------------------------------
-// patch_file
-// ---------------------------------------------------------------------------
 
 /** Apply a single patch operation to a text string. */
 function applyPatchOp(content: string, op: PatchOp): string {
