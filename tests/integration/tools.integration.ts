@@ -642,7 +642,7 @@ describe("search_files (integration)", () => {
       owner: OWNER,
       repo: REPO,
       pattern: ".integration",
-      ref: "feat/pagination",
+      ref: "main",
     });
 
     expect(result.results.total_matched).toBeGreaterThan(0);
