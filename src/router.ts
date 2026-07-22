@@ -100,12 +100,26 @@ export async function handleMcpRequest(
     }
 
     if (url.pathname === "/health") {
+      try {
+        assertAuthorized(req, log);
+      } catch {
+        return sendJson(res, 401, { error: "Unauthorized" });
+      }
+
       log.info("health_check_ok", { path: url.pathname });
       return sendJson(res, 200, { ok: true });
     }
 
     // HEAD / — some MCP clients probe before connecting
     if (url.pathname === "/" && req.method === "HEAD") {
+      try {
+        assertAuthorized(req, log);
+      } catch {
+        res.statusCode = 401;
+        res.end();
+        return;
+      }
+
       res.statusCode = 200;
       res.end();
       return;
@@ -154,9 +168,6 @@ export async function handleMcpRequest(
     }
 
     const rawBody = await readJsonBody(req);
-
-    log.info("jsonrpc_raw_body", { rawBody });
-
     const parsed = jsonRpcRequestSchema.safeParse(rawBody);
 
     if (!parsed.success) {
