@@ -3,9 +3,6 @@ const SECRET = process.env.CONNECTOR_SECRET!;
 const OWNER = "SamNewhouse";
 const REPO = "github-mcp-bridge";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 async function callTool(name: string, input: Record<string, unknown>) {
   const res = await fetch(BASE_URL, {
     method: "POST",
@@ -51,9 +48,6 @@ async function callToolRaw(name: string, input: Record<string, unknown>) {
   return res.json();
 }
 
-// ---------------------------------------------------------------------------
-// get_file_contents
-// ---------------------------------------------------------------------------
 describe("get_file_contents (integration)", () => {
   /**
    * Happy path — fetches a known small file from the live repo.
@@ -121,9 +115,6 @@ describe("get_file_contents (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// get_multiple_files
-// ---------------------------------------------------------------------------
 describe("get_multiple_files (integration)", () => {
   const KNOWN_PATHS = [
     "src/github/files.ts",

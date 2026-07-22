@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import { AppError } from "../../src/lib/errors";
 
-// Mock the GitHub client before importing the module under test
 jest.mock("../../src/github/client", () => ({
   githubRequest: jest.fn(),
 }));
@@ -20,7 +19,6 @@ const mockGithubRequest = githubRequest as jest.MockedFunction<
   typeof githubRequest
 >;
 
-// Helper to build a fake GitHub file response
 function makeGitHubFile(content: string, path = "src/example.ts") {
   return {
     type: "file" as const,

@@ -1,43 +1,10 @@
-// =============================================================================
-// WRITE-SAFETY CONTRACT
-// =============================================================================
-// This file MUST remain read-only. Every test in this suite connects to a
-// live GitHub PAT via a running server instance.
-//
-// PERMITTED in this file:
-//   - GET / list / search / read operations against SamNewhouse/github-mcp-bridge
-//   - callToolRaw() calls that exercise INPUT VALIDATION only (i.e. they are
-//     expected to return a validation error *before* any GitHub API call is made)
-//
-// FORBIDDEN in this file:
-//   - Any callTool() / callToolRaw() call that would, if validation passed,
-//     create, update, patch, delete, or comment on any GitHub resource.
-//   - Temporary file creation / cleanup.
-//   - Tests for: create_branch (live), upsert_file (live), patch_file (live),
-//     delete_file (live), create_pull_request (live), update_pull_request (live),
-//     update_issue (live), create_issue (live), add_issue_comment (live),
-//     link_issue_to_pull_request (live).
-//
-// All mutation-tool coverage lives in mocked unit tests:
-//   - tests/unit/branches.test.ts      (createBranch)
-//   - tests/unit/files.test.ts         (upsertFile, patchFile, deleteFile)
-//   - tests/unit/issues.test.ts        (createIssue, updateIssue, addIssueComment,
-//                                       linkIssueToPullRequest)
-//   - tests/unit/pull-requests.test.ts (createPullRequest, updatePullRequest)
-// No real network calls are made in those files.
-// =============================================================================
-
 const BASE_URL = `http://localhost:${process.env.PORT ?? "3000"}`;
 const SECRET = process.env.CONNECTOR_SECRET!;
 const OWNER = "SamNewhouse";
 const REPO = "github-mcp-bridge";
 
-// PR #1 is a real, permanent PR in this repo — safe to use as a stable test fixture.
 const KNOWN_PR_NUMBER = 1;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 async function callTool(name: string, input: Record<string, unknown>) {
   const res = await fetch(BASE_URL, {
     method: "POST",
@@ -74,9 +41,6 @@ async function callToolRaw(name: string, input: Record<string, unknown>) {
   return res.json();
 }
 
-// ---------------------------------------------------------------------------
-// list_repositories
-// ---------------------------------------------------------------------------
 describe("list_repositories (integration)", () => {
   it("returns a non-empty array of repositories with expected fields", async () => {
     const result = await callTool("list_repositories", {});
@@ -105,9 +69,6 @@ describe("list_repositories (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_branches
-// ---------------------------------------------------------------------------
 describe("list_branches (integration)", () => {
   it("returns branches with name, sha, and protected fields", async () => {
     const result = await callTool("list_branches", { owner: OWNER, repo: REPO });
@@ -125,9 +86,6 @@ describe("list_branches (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// get_branch
-// ---------------------------------------------------------------------------
 describe("get_branch (integration)", () => {
   it("returns branch detail including latest_commit for main", async () => {
     const result = await callTool("get_branch", { owner: OWNER, repo: REPO, branch: "main" });
@@ -145,9 +103,6 @@ describe("get_branch (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_open_pull_requests
-// ---------------------------------------------------------------------------
 describe("list_open_pull_requests (integration)", () => {
   it("returns an array of open pull requests with expected fields", async () => {
     const result = await callTool("list_open_pull_requests", { owner: OWNER, repo: REPO });
@@ -162,9 +117,6 @@ describe("list_open_pull_requests (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_pull_requests
-// ---------------------------------------------------------------------------
 describe("list_pull_requests (integration)", () => {
   it("returns an array when state=all", async () => {
     const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
@@ -194,9 +146,6 @@ describe("list_pull_requests (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// get_pull_request
-// ---------------------------------------------------------------------------
 describe("get_pull_request (integration)", () => {
   it("returns full PR detail with all mapped fields", async () => {
     const result = await callTool("get_pull_request", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -214,9 +163,6 @@ describe("get_pull_request (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// get_pull_request_diff
-// ---------------------------------------------------------------------------
 describe("get_pull_request_diff (integration)", () => {
   it("returns a non-empty diff string for a known PR", async () => {
     const result = await callTool("get_pull_request_diff", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -226,9 +172,6 @@ describe("get_pull_request_diff (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// get_pull_request_reviews
-// ---------------------------------------------------------------------------
 describe("get_pull_request_reviews (integration)", () => {
   it("returns a reviews array for a known PR", async () => {
     const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -256,9 +199,6 @@ describe("get_pull_request_reviews (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_pull_request_files
-// ---------------------------------------------------------------------------
 describe("list_pull_request_files (integration)", () => {
   it("returns files and truncated flag for a known PR", async () => {
     const result = await callTool("list_pull_request_files", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -281,9 +221,6 @@ describe("list_pull_request_files (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_pull_request_comments
-// ---------------------------------------------------------------------------
 describe("list_pull_request_comments (integration)", () => {
   it("returns a comments array for a known PR", async () => {
     const result = await callTool("list_pull_request_comments", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
@@ -309,9 +246,6 @@ describe("list_pull_request_comments (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_issues
-// ---------------------------------------------------------------------------
 describe("list_issues (integration)", () => {
   it("returns open issues excluding pull requests", async () => {
     const result = await callTool("list_issues", { owner: OWNER, repo: REPO, state: "open" });
@@ -338,9 +272,6 @@ describe("list_issues (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// get_issue
-// ---------------------------------------------------------------------------
 describe("get_issue (integration)", () => {
   it("throws when the number belongs to a pull request", async () => {
     await expect(
@@ -355,9 +286,6 @@ describe("get_issue (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_issue_comments
-// ---------------------------------------------------------------------------
 describe("list_issue_comments (integration)", () => {
   it("returns comments array for a known issue/PR number", async () => {
     const result = await callTool("list_issue_comments", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER });
@@ -376,9 +304,6 @@ describe("list_issue_comments (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// get_commit
-// ---------------------------------------------------------------------------
 describe("get_commit (integration)", () => {
   it("returns commit detail with stats and files for a real commit SHA", async () => {
     const branch = await callTool("get_branch", { owner: OWNER, repo: REPO, branch: "main" });
@@ -397,9 +322,6 @@ describe("get_commit (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_commits
-// ---------------------------------------------------------------------------
 describe("list_commits (integration)", () => {
   it("returns recent commits with expected fields", async () => {
     const result = await callTool("list_commits", { owner: OWNER, repo: REPO, branch: "main", perPage: 5 });
@@ -424,9 +346,6 @@ describe("list_commits (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// list_directory
-// ---------------------------------------------------------------------------
 describe("list_directory (integration)", () => {
   it("returns entries with file and dir types at the repo root", async () => {
     const result = await callTool("list_directory", { owner: OWNER, repo: REPO, path: "" });
@@ -451,9 +370,6 @@ describe("list_directory (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// search_code
-// ---------------------------------------------------------------------------
 describe("search_code (integration)", () => {
   it("returns results with path and matches for a known query", async () => {
     const result = await callTool("search_code", { owner: OWNER, repo: REPO, query: "githubRequest" });
@@ -471,9 +387,6 @@ describe("search_code (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// search_files
-// ---------------------------------------------------------------------------
 describe("search_files (integration)", () => {
   it("returns matching files for a known path pattern", async () => {
     const result = await callTool("search_files", { owner: OWNER, repo: REPO, pattern: ".integration", ref: "main" });
@@ -501,9 +414,6 @@ describe("search_files (integration)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Unknown tool
-// ---------------------------------------------------------------------------
 describe("unknown tool (integration)", () => {
   it("returns an error for an unknown tool name", async () => {
     const json = await callToolRaw("tool_that_does_not_exist", {});
