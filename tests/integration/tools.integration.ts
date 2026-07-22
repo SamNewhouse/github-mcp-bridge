@@ -1,8 +1,31 @@
+// =============================================================================
+// WRITE-SAFETY CONTRACT
+// =============================================================================
+// This file MUST remain read-only. Every test in this suite connects to a
+// live GitHub PAT via a running server instance.
+//
+// PERMITTED in this file:
+//   - GET / list / search / read operations against SamNewhouse/github-mcp-bridge
+//   - callToolRaw() calls that exercise INPUT VALIDATION only (i.e. they are
+//     expected to return a validation error *before* any GitHub API call is made)
+//
+// FORBIDDEN in this file:
+//   - Any callTool() / callToolRaw() call that would, if validation passed,
+//     create, update, patch, delete, or comment on any GitHub resource.
+//   - Temporary file creation / cleanup.
+//   - Tests for: create_branch (live), upsert_file (live), patch_file (live),
+//     delete_file (live), create_pull_request (live), update_pull_request (live),
+//     update_issue (live), create_issue (live), add_issue_comment (live),
+//     link_issue_to_pull_request (live).
+//
+// All mutation-tool coverage lives in tests/unit/mutation-tools.unit.ts using
+// jest.mock() — no real network calls are made there.
+// =============================================================================
+
 const BASE_URL = `http://localhost:${process.env.PORT ?? "3000"}`;
 const SECRET = process.env.CONNECTOR_SECRET!;
 const OWNER = "SamNewhouse";
 const REPO = "github-mcp-bridge";
-const TEST_BRANCH = "feat/add-missing-github-mcp-tools";
 
 // PR #1 is a real, permanent PR in this repo — safe to use as a stable test fixture.
 const KNOWN_PR_NUMBER = 1;
@@ -135,6 +158,38 @@ describe("list_open_pull_requests (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// list_pull_requests
+// ---------------------------------------------------------------------------
+describe("list_pull_requests (integration)", () => {
+  it("returns an array when state=all", async () => {
+    const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
+    expect(Array.isArray(result.pull_requests)).toBe(true);
+    expect(result.pull_requests.length).toBeGreaterThan(0);
+  });
+
+  it("each PR has the expected mapped fields", async () => {
+    const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
+    for (const pr of result.pull_requests) {
+      expect(pr).toHaveProperty("number");
+      expect(pr).toHaveProperty("title");
+      expect(pr).toHaveProperty("state");
+      expect(pr).toHaveProperty("draft");
+      expect(pr).toHaveProperty("html_url");
+      expect(pr).toHaveProperty("author");
+      expect(pr).toHaveProperty("head");
+      expect(pr).toHaveProperty("base");
+      expect(pr).toHaveProperty("created_at");
+      expect(pr).toHaveProperty("updated_at");
+    }
+  });
+
+  it("rejects an invalid state value", async () => {
+    const json = await callToolRaw("list_pull_requests", { owner: OWNER, repo: REPO, state: "invalid" });
+    expect(json.error).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // get_pull_request
 // ---------------------------------------------------------------------------
 describe("get_pull_request (integration)", () => {
@@ -163,6 +218,36 @@ describe("get_pull_request_diff (integration)", () => {
     expect(result.diff.pullNumber).toBe(KNOWN_PR_NUMBER);
     expect(typeof result.diff.diff).toBe("string");
     expect(result.diff.diff.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// get_pull_request_reviews
+// ---------------------------------------------------------------------------
+describe("get_pull_request_reviews (integration)", () => {
+  it("returns a reviews array for a known PR", async () => {
+    const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    expect(Array.isArray(result.reviews)).toBe(true);
+  });
+
+  it("each review has the expected response shape", async () => {
+    const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
+    if (result.reviews.length > 0) {
+      const review = result.reviews[0];
+      expect(review).toHaveProperty("id");
+      expect(review).toHaveProperty("state");
+      expect(review).toHaveProperty("body");
+      expect(review).toHaveProperty("author");
+      expect(review).toHaveProperty("commit_id");
+      expect(review).toHaveProperty("submitted_at");
+      expect(review).toHaveProperty("html_url");
+    }
+  });
+
+  it("throws for a non-existent pull request number", async () => {
+    await expect(
+      callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: 999999 })
+    ).rejects.toThrow();
   });
 });
 
@@ -283,26 +368,6 @@ describe("list_issue_comments (integration)", () => {
     await expect(
       callTool("list_issue_comments", { owner: OWNER, repo: REPO, issueNumber: 999999 })
     ).rejects.toThrow();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// add_issue_comment — validation only
-// ---------------------------------------------------------------------------
-describe("add_issue_comment (integration)", () => {
-  it("rejects request with missing body field", async () => {
-    const json = await callToolRaw("add_issue_comment", { owner: OWNER, repo: REPO, issueNumber: KNOWN_PR_NUMBER });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// create_issue — validation only
-// ---------------------------------------------------------------------------
-describe("create_issue (integration)", () => {
-  it("rejects request with missing title field", async () => {
-    const json = await callToolRaw("create_issue", { owner: OWNER, repo: REPO });
-    expect(json.error).toBeDefined();
   });
 });
 
@@ -432,201 +497,11 @@ describe("search_files (integration)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// update_issue — validation only
-// ---------------------------------------------------------------------------
-describe("update_issue (integration — validation)", () => {
-  it("returns an error when no update fields are provided", async () => {
-    const json = await callToolRaw("update_issue", { owner: OWNER, repo: REPO, issueNumber: 999999 });
-    expect(json.error).toBeDefined();
-  });
-
-  it("rejects an invalid state value with a validation error", async () => {
-    const json = await callToolRaw("update_issue", { owner: OWNER, repo: REPO, issueNumber: 1, state: "merged" });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// update_pull_request — validation only
-// ---------------------------------------------------------------------------
-describe("update_pull_request (integration — validation)", () => {
-  it("returns an error when no update fields are provided", async () => {
-    const json = await callToolRaw("update_pull_request", { owner: OWNER, repo: REPO, pullNumber: 999999 });
-    expect(json.error).toBeDefined();
-  });
-
-  it("rejects an invalid state value with a validation error", async () => {
-    const json = await callToolRaw("update_pull_request", { owner: OWNER, repo: REPO, pullNumber: 1, state: "merged" });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// link_issue_to_pull_request — validation only
-// ---------------------------------------------------------------------------
-describe("link_issue_to_pull_request (integration)", () => {
-  it("rejects an invalid keyword with a validation error", async () => {
-    const json = await callToolRaw("link_issue_to_pull_request", { owner: OWNER, repo: REPO, pullNumber: 1, issueNumber: 1, keyword: "merges" });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// upsert_file — validation only
-// ---------------------------------------------------------------------------
-describe("upsert_file (integration — validation)", () => {
-  it("rejects request with missing content field", async () => {
-    const json = await callToolRaw("upsert_file", { owner: OWNER, repo: REPO, path: "test.txt", message: "test", branch: "main" });
-    expect(json.error).toBeDefined();
-  });
-
-  it("rejects request with missing branch field", async () => {
-    const json = await callToolRaw("upsert_file", { owner: OWNER, repo: REPO, path: "test.txt", content: "hello", message: "test" });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// create_branch — validation only
-// ---------------------------------------------------------------------------
-describe("create_branch (integration — validation)", () => {
-  it("throws when the base branch does not exist", async () => {
-    await expect(
-      callTool("create_branch", { owner: OWNER, repo: REPO, baseBranch: "branch-that-does-not-exist-xyz", newBranch: "test/should-not-be-created" })
-    ).rejects.toThrow();
-  });
-
-  it("rejects request with missing newBranch field", async () => {
-    const json = await callToolRaw("create_branch", { owner: OWNER, repo: REPO, baseBranch: "main" });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Unknown tool
 // ---------------------------------------------------------------------------
 describe("unknown tool (integration)", () => {
   it("returns an error for an unknown tool name", async () => {
     const json = await callToolRaw("tool_that_does_not_exist", {});
     expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// patch_file — validation only (no file I/O)
-// ---------------------------------------------------------------------------
-describe("patch_file (integration)", () => {
-  it("rejects request with missing patches field", async () => {
-    const json = await callToolRaw("patch_file", {
-      owner: OWNER, repo: REPO, path: "any.txt", branch: TEST_BRANCH, message: "test",
-    });
-    expect(json.error).toBeDefined();
-  });
-
-  it("rejects request with empty patches array", async () => {
-    const json = await callToolRaw("patch_file", {
-      owner: OWNER, repo: REPO, path: "any.txt", branch: TEST_BRANCH, message: "test", patches: [],
-    });
-    expect(json.error).toBeDefined();
-  });
-
-  it("rejects request with an invalid patch op", async () => {
-    const json = await callToolRaw("patch_file", {
-      owner: OWNER, repo: REPO, path: "any.txt", branch: TEST_BRANCH, message: "test",
-      patches: [{ op: "invalid_op", find: "x", replace: "y" }],
-    });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// delete_file — validation only (no file I/O)
-// ---------------------------------------------------------------------------
-describe("delete_file (integration)", () => {
-  it("rejects request with missing path field", async () => {
-    const json = await callToolRaw("delete_file", { owner: OWNER, repo: REPO, branch: TEST_BRANCH, message: "test" });
-    expect(json.error).toBeDefined();
-  });
-
-  it("rejects request with missing branch field", async () => {
-    const json = await callToolRaw("delete_file", { owner: OWNER, repo: REPO, path: "test.txt", message: "test" });
-    expect(json.error).toBeDefined();
-  });
-
-  it("rejects request with missing message field", async () => {
-    const json = await callToolRaw("delete_file", { owner: OWNER, repo: REPO, path: "test.txt", branch: TEST_BRANCH });
-    expect(json.error).toBeDefined();
-  });
-
-  it("throws when attempting to delete a non-existent file", async () => {
-    await expect(
-      callTool("delete_file", {
-        owner: OWNER, repo: REPO, branch: TEST_BRANCH,
-        path: "this/path/does/not/exist/file.txt",
-        message: "test: delete non-existent file",
-      })
-    ).rejects.toThrow();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// list_pull_requests
-// ---------------------------------------------------------------------------
-describe("list_pull_requests (integration)", () => {
-  it("returns an array when state=all", async () => {
-    const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
-    expect(Array.isArray(result.pull_requests)).toBe(true);
-    expect(result.pull_requests.length).toBeGreaterThan(0);
-  });
-
-  it("each PR has the expected mapped fields", async () => {
-    const result = await callTool("list_pull_requests", { owner: OWNER, repo: REPO, state: "all" });
-    for (const pr of result.pull_requests) {
-      expect(pr).toHaveProperty("number");
-      expect(pr).toHaveProperty("title");
-      expect(pr).toHaveProperty("state");
-      expect(pr).toHaveProperty("draft");
-      expect(pr).toHaveProperty("html_url");
-      expect(pr).toHaveProperty("author");
-      expect(pr).toHaveProperty("head");
-      expect(pr).toHaveProperty("base");
-      expect(pr).toHaveProperty("created_at");
-      expect(pr).toHaveProperty("updated_at");
-    }
-  });
-
-  it("rejects an invalid state value", async () => {
-    const json = await callToolRaw("list_pull_requests", { owner: OWNER, repo: REPO, state: "invalid" });
-    expect(json.error).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// get_pull_request_reviews
-// ---------------------------------------------------------------------------
-describe("get_pull_request_reviews (integration)", () => {
-  it("returns a reviews array for a known PR", async () => {
-    const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
-    expect(Array.isArray(result.reviews)).toBe(true);
-  });
-
-  it("each review has the expected response shape", async () => {
-    const result = await callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: KNOWN_PR_NUMBER });
-    if (result.reviews.length > 0) {
-      const review = result.reviews[0];
-      expect(review).toHaveProperty("id");
-      expect(review).toHaveProperty("state");
-      expect(review).toHaveProperty("body");
-      expect(review).toHaveProperty("author");
-      expect(review).toHaveProperty("commit_id");
-      expect(review).toHaveProperty("submitted_at");
-      expect(review).toHaveProperty("html_url");
-    }
-  });
-
-  it("throws for a non-existent pull request number", async () => {
-    await expect(
-      callTool("get_pull_request_reviews", { owner: OWNER, repo: REPO, pullNumber: 999999 })
-    ).rejects.toThrow();
   });
 });
