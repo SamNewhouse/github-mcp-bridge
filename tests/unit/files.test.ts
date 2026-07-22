@@ -48,6 +48,14 @@ beforeEach(() => {
   mockGithubRequest.mockReset();
 });
 
+/**
+ * getFileContents
+ *
+ * Fetches a single file by path and decodes its base64 content. Enforces a
+ * 3.5 MB budget matching the Vercel payload cap — files that exceed the limit
+ * are sliced and returned with truncated: true plus fullSizeBytes and
+ * truncatedAt metadata. Throws AppError when the path resolves to a directory.
+ */
 describe("getFileContents", () => {
   /**
    * Happy path — a normal file well within the 3.5 MB budget.
@@ -134,6 +142,15 @@ describe("getFileContents", () => {
   });
 });
 
+/**
+ * getMultipleFiles
+ *
+ * Fetches a list of file paths in paginated batches. Deduplicates paths before
+ * fetching and enforces a cumulative 3.5 MB budget — once the budget is
+ * exceeded mid-page the current file is excluded and hasMore is set so the
+ * caller can resume. Returns a pagination object with cursor, nextCursor,
+ * hasMore, total, and returned counts.
+ */
 describe("getMultipleFiles", () => {
   const paths = [
     "src/a.ts",
@@ -248,6 +265,14 @@ describe("getMultipleFiles", () => {
   });
 });
 
+/**
+ * listDirectory
+ *
+ * Lists the entries at a given repository path. Throws AppError when the path
+ * points to a file (GitHub returns a plain object rather than an array).
+ * An empty string path lists the repository root. Forwards an optional ref
+ * as a query parameter.
+ */
 describe("listDirectory", () => {
   /**
    * Happy path — GitHub returns an array of entries for a directory.
@@ -331,6 +356,15 @@ describe("listDirectory", () => {
   });
 });
 
+/**
+ * upsertFile
+ *
+ * Creates or updates a file using the GitHub Contents PUT endpoint. Performs
+ * a GET first to determine whether the file exists and to obtain its SHA for
+ * updates. 404 on the GET indicates a new file (no sha in PUT body). Any
+ * other error from the GET is re-thrown. Returns created: true/false and
+ * the commit + file metadata from GitHub.
+ */
 describe("upsertFile", () => {
   const upsertInput = {
     path: "src/new-file.ts",
@@ -462,6 +496,13 @@ describe("upsertFile", () => {
   });
 });
 
+/**
+ * deleteFile
+ *
+ * Deletes a file by first fetching its SHA (required by the GitHub Contents
+ * DELETE endpoint) then issuing the DELETE. Throws AppError when the path
+ * resolves to a directory rather than a file.
+ */
 describe("deleteFile", () => {
   const deleteInput = {
     path: "src/old-file.ts",
@@ -550,6 +591,15 @@ describe("deleteFile", () => {
   });
 });
 
+/**
+ * patchFile
+ *
+ * Applies a series of text-based patch operations (replace_once, replace_all,
+ * insert_before, insert_after) to an existing file's content, then writes the
+ * result back via a PUT. Throws AppError for binary files (null byte detected),
+ * and for replace_once when the find text is not present. Includes the file's
+ * existing SHA in the PUT body to guard against concurrent modifications.
+ */
 describe("patchFile", () => {
   const patchInput = {
     path: "src/config.ts",
