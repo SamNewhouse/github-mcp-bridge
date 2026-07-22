@@ -36,9 +36,6 @@ function makeIssue(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// listIssues
-// ---------------------------------------------------------------------------
 describe("listIssues", () => {
   /**
    * PR filtering — GitHub's /issues endpoint returns both issues and PRs;
@@ -115,9 +112,6 @@ describe("listIssues", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getIssue
-// ---------------------------------------------------------------------------
 describe("getIssue", () => {
   /**
    * PR guard — GitHub returns issue-like data for PR numbers on the /issues
@@ -160,9 +154,6 @@ describe("getIssue", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// updateIssue
-// ---------------------------------------------------------------------------
 describe("updateIssue", () => {
   /**
    * Empty payload guard — updateIssue checks that at least one field is
@@ -220,9 +211,6 @@ describe("updateIssue", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// linkIssueToPullRequest
-// ---------------------------------------------------------------------------
 describe("linkIssueToPullRequest", () => {
   /**
    * Not yet linked — PR body doesn't contain any closing keyword for issue #5.
@@ -316,9 +304,6 @@ describe("linkIssueToPullRequest", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listIssueComments
-// ---------------------------------------------------------------------------
 describe("listIssueComments", () => {
   /**
    * Return shape — verifies each comment has the expected mapped fields.
@@ -366,9 +351,6 @@ describe("listIssueComments", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// addIssueComment
-// ---------------------------------------------------------------------------
 describe("addIssueComment", () => {
   /**
    * Happy path — asserts the correct POST body is sent and the returned
@@ -393,9 +375,6 @@ describe("addIssueComment", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// createIssue
-// ---------------------------------------------------------------------------
 describe("createIssue", () => {
   /**
    * Minimal input — only title is required. Asserts body defaults to empty
