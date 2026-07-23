@@ -47,6 +47,44 @@ type GitHubDeleteFileResponse = {
   };
 };
 
+type GitHubRefResponse = {
+  object: {
+    sha: string;
+  };
+};
+
+type GitHubCommitObjectResponse = {
+  sha: string;
+  tree: {
+    sha: string;
+  };
+};
+
+type GitHubBlobResponse = {
+  sha: string;
+};
+
+type GitHubTreeResponse = {
+  sha: string;
+  url: string;
+};
+
+type GitHubCommitResponse = {
+  sha: string;
+  html_url: string;
+  message: string;
+};
+
+type GitHubRefUpdateResponse = {
+  ref: string;
+  object: { sha: string };
+};
+
+export type BatchUpsertEntry = {
+  path: string;
+  content: string;
+};
+
 function buildContentsPath(path: string, ref?: string): string {
   const trimmedPath = path.trim();
   const encodedPath = trimmedPath
@@ -90,7 +128,6 @@ export async function getFileContents(
   if (byteLength > CONTENT_BYTE_BUDGET) {
     const truncatedContent = content.slice(
       0,
-      // Slice by chars, not bytes — close enough for UTF-8 prose
       Math.floor(CONTENT_BYTE_BUDGET),
     );
 
@@ -116,6 +153,24 @@ export async function getFileContents(
   };
 }
 
+export async function getFileRaw(
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string,
+) {
+  const file = await githubRequest<GitHubContentFile>(
+    `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
+    { owner },
+  );
+
+  if (file.type !== "file") {
+    throw new AppError(`Path is not a file: ${path}`, 400);
+  }
+
+  return decodeFileContent(file);
+}
+
 export type PaginatedFilesResult = {
   files: Awaited<ReturnType<typeof getFileContents>>[];
   pagination: {
@@ -136,7 +191,6 @@ export async function getMultipleFiles(
   cursor = 0,
   pageSize = 10,
 ): Promise<PaginatedFilesResult> {
-  // Deduplicate to avoid wasted GitHub API calls
   const uniquePaths = [...new Set(paths)];
 
   const total = uniquePaths.length;
@@ -144,7 +198,6 @@ export async function getMultipleFiles(
   const end = Math.min(start + pageSize, total);
   const page = uniquePaths.slice(start, end);
 
-  // Fetch files sequentially, accumulate byte count, stop if budget would be exceeded
   const files: Awaited<ReturnType<typeof getFileContents>>[] = [];
   let bytesUsed = 0;
   let stoppedEarlyAt: number | null = null;
@@ -156,10 +209,7 @@ export async function getMultipleFiles(
       "utf8",
     );
 
-    // Always include the first file even if it alone exceeds the budget —
-    // otherwise a single oversized file would loop forever returning nothing.
     if (files.length > 0 && bytesUsed + fileBytes > CONTENT_BYTE_BUDGET) {
-      // Adding this file would exceed the budget — stop here and adjust cursor
       stoppedEarlyAt = start + i;
       break;
     }
@@ -268,6 +318,101 @@ export async function upsertFile(
   };
 }
 
+export async function batchUpsertFiles(
+  owner: string,
+  repo: string,
+  input: {
+    branch: string;
+    message: string;
+    files: BatchUpsertEntry[];
+  },
+) {
+  const refData = await githubRequest<GitHubRefResponse>(
+    `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`,
+    { owner },
+  );
+  const baseCommitSha = refData.object.sha;
+
+  const baseCommit = await githubRequest<GitHubCommitObjectResponse>(
+    `/repos/${owner}/${repo}/git/commits/${baseCommitSha}`,
+    { owner },
+  );
+  const baseTreeSha = baseCommit.tree.sha;
+
+  const treeEntries = await Promise.all(
+    input.files.map(async (file) => {
+      const blob = await githubRequest<GitHubBlobResponse>(
+        `/repos/${owner}/${repo}/git/blobs`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: Buffer.from(file.content, "utf8").toString("base64"),
+            encoding: "base64",
+          }),
+          owner,
+        },
+      );
+
+      return {
+        path: file.path,
+        mode: "100644" as const,
+        type: "blob" as const,
+        sha: blob.sha,
+      };
+    }),
+  );
+
+  const tree = await githubRequest<GitHubTreeResponse>(
+    `/repos/${owner}/${repo}/git/trees`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: treeEntries,
+      }),
+      owner,
+    },
+  );
+
+  const commit = await githubRequest<GitHubCommitResponse>(
+    `/repos/${owner}/${repo}/git/commits`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: input.message,
+        tree: tree.sha,
+        parents: [baseCommitSha],
+      }),
+      owner,
+    },
+  );
+
+  await githubRequest<GitHubRefUpdateResponse>(
+    `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sha: commit.sha }),
+      owner,
+    },
+  );
+
+  return {
+    commit: {
+      sha: commit.sha,
+      html_url: commit.html_url,
+      message: commit.message,
+    },
+    filesCommitted: input.files.length,
+    branch: input.branch,
+  };
+}
+
+export const createCommit = batchUpsertFiles;
+
 export async function deleteFile(
   owner: string,
   repo: string,
@@ -277,7 +422,6 @@ export async function deleteFile(
     message: string;
   },
 ) {
-  // Fetch the current file to obtain its SHA (required by the GitHub API).
   const existing = await githubRequest<GitHubContentFile>(
     `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
     { owner },
@@ -332,7 +476,6 @@ function applyPatchOp(content: string, op: PatchOp): string {
           422,
         );
       }
-      // Escape special regex characters so literal strings are matched.
       const escaped = op.find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       return content.replace(new RegExp(escaped, "g"), op.replace);
     }
@@ -369,7 +512,6 @@ export async function patchFile(
     patches: PatchOp[];
   },
 ) {
-  // Read the current file.
   const existing = await githubRequest<GitHubContentFile>(
     `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
     { owner },
@@ -379,7 +521,6 @@ export async function patchFile(
     throw new AppError(`Path is not a file: ${input.path}`, 400);
   }
 
-  // Reject binary content — base64-encoded binary will not decode to valid UTF-8 text.
   const rawContent = existing.content.replace(/\n/g, "");
   if (existing.encoding !== "base64") {
     throw new AppError(
@@ -390,8 +531,6 @@ export async function patchFile(
 
   let text = Buffer.from(rawContent, "base64").toString("utf8");
 
-  // Heuristic binary guard: if the decoded content contains a null byte it is
-  // almost certainly binary — refuse rather than corrupt.
   if (text.includes("\0")) {
     throw new AppError(
       `patch_file: refusing to patch binary file: ${input.path}`,
@@ -399,12 +538,10 @@ export async function patchFile(
     );
   }
 
-  // Apply each patch in order.
   for (const op of input.patches) {
     text = applyPatchOp(text, op);
   }
 
-  // Write the patched content back.
   const response = await githubRequest<GitHubUpsertFileResponse>(
     `/repos/${owner}/${repo}${buildContentsPath(input.path)}`,
     {

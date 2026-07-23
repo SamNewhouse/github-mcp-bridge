@@ -1,6 +1,9 @@
 import { AppError } from "../lib/errors";
 import { addIssueCommentTool } from "./add-issue-comment";
+import { addPullRequestCommentTool } from "./add-pull-request-comment";
+import { batchUpsertFilesTool } from "./batch-upsert-files";
 import { createBranchTool } from "./create-branch";
+import { createCommitTool } from "./create-commit";
 import { createIssueTool } from "./create-issue";
 import { createPullRequestTool } from "./create-pull-request";
 import { deleteFileTool } from "./delete-file";
@@ -12,6 +15,8 @@ import { getMultipleFilesTool } from "./get-multiple-files";
 import { getPullRequestDiffTool } from "./get-pull-request-diff";
 import { getPullRequestReviewsTool } from "./get-pull-request-reviews";
 import { getPullRequestTool } from "./get-pull-request";
+import { getRepositoryTool } from "./get-repository";
+import { getWorkflowRunTool } from "./get-workflow-run";
 import { linkIssueToPullRequestTool } from "./link-issue-to-pull-request";
 import { listBranchesTool } from "./list-branches";
 import { listCommitsTool } from "./list-commits";
@@ -23,7 +28,9 @@ import { listPullRequestCommentsTool } from "./list-pull-request-comments";
 import { listPullRequestFilesTool } from "./list-pull-request-files";
 import { listPullRequestsTool } from "./list-pull-requests";
 import { listRepositoriesTool } from "./list-repositories";
+import { listWorkflowRunsTool } from "./list-workflow-runs";
 import { patchFileTool } from "./patch-file";
+import { readFileTool } from "./read-file";
 import { searchCodeTool } from "./search-code";
 import { searchFilesTool } from "./search-files";
 import { updateIssueTool } from "./update-issue";
@@ -32,11 +39,13 @@ import { upsertFileTool } from "./upsert-file";
 
 const tools = [
   listRepositoriesTool,
+  getRepositoryTool,
   listBranchesTool,
   listOpenPullRequestsTool,
   listPullRequestsTool,
   createBranchTool,
   getFileContentsTool,
+  readFileTool,
   getMultipleFilesTool,
   listDirectoryTool,
   getPullRequestTool,
@@ -45,9 +54,12 @@ const tools = [
   getPullRequestReviewsTool,
   updatePullRequestTool,
   upsertFileTool,
+  batchUpsertFilesTool,
+  createCommitTool,
   patchFileTool,
   deleteFileTool,
   createPullRequestTool,
+  addPullRequestCommentTool,
   getPullRequestDiffTool,
   listIssuesTool,
   getIssueTool,
@@ -61,6 +73,8 @@ const tools = [
   getBranchTool,
   listIssueCommentsTool,
   addIssueCommentTool,
+  listWorkflowRunsTool,
+  getWorkflowRunTool,
 ] as const;
 
 export const toolDefinitions = Object.fromEntries(

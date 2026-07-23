@@ -3,7 +3,10 @@ jest.mock("../../src/github/client", () => ({
 }));
 
 import { githubRequest } from "../../src/github/client";
-import { listRepositories } from "../../src/github/repositories";
+import {
+  getRepository,
+  listRepositories,
+} from "../../src/github/repositories";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
 
@@ -21,6 +24,29 @@ function makeRepo(overrides: Partial<Record<string, unknown>> = {}) {
     html_url: "https://github.com/alice/my-repo",
     updated_at: "2026-01-01T00:00:00Z",
     owner: { login: "alice" },
+    ...overrides,
+  };
+}
+
+function makeFullRepo(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    name: "my-repo",
+    full_name: "alice/my-repo",
+    private: false,
+    default_branch: "main",
+    html_url: "https://github.com/alice/my-repo",
+    description: "Test repository",
+    language: "TypeScript",
+    stargazers_count: 42,
+    forks_count: 7,
+    open_issues_count: 3,
+    pushed_at: "2026-01-02T00:00:00Z",
+    created_at: "2025-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    owner: { login: "alice" },
+    topics: ["mcp", "github"],
+    visibility: "public",
     ...overrides,
   };
 }
@@ -108,5 +134,74 @@ describe("listRepositories", () => {
     const result = await listRepositories();
 
     expect(result).toEqual([]);
+  });
+});
+
+/**
+ * getRepository
+ *
+ * Fetches full detail for a single repository and maps the GitHub response
+ * to a flat shape. owner is flattened from owner.login. topics defaults
+ * to an empty array when omitted by the API, and nullable fields such as
+ * description and language are preserved as null.
+ */
+describe("getRepository", () => {
+  /**
+   * Return shape — verifies detailed repository fields are present and
+   * correctly mapped, including topics and visibility.
+   */
+  it("maps repository detail fields including topics and visibility", async () => {
+    mock.mockResolvedValueOnce(makeFullRepo());
+
+    const result = await getRepository("alice", "my-repo");
+
+    expect(result).toMatchObject({
+      id: 1,
+      owner: "alice",
+      name: "my-repo",
+      full_name: "alice/my-repo",
+      private: false,
+      default_branch: "main",
+      html_url: "https://github.com/alice/my-repo",
+      description: "Test repository",
+      language: "TypeScript",
+      stargazers_count: 42,
+      forks_count: 7,
+      open_issues_count: 3,
+      topics: ["mcp", "github"],
+      visibility: "public",
+      pushed_at: "2026-01-02T00:00:00Z",
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+  });
+
+  /**
+   * Null preservation — GitHub may return null for description or language.
+   * Asserts both fields are preserved as null in the mapped output.
+   */
+  it("preserves null description and language", async () => {
+    mock.mockResolvedValueOnce(
+      makeFullRepo({ description: null, language: null }),
+    );
+
+    const result = await getRepository("alice", "my-repo");
+
+    expect(result.description).toBeNull();
+    expect(result.language).toBeNull();
+  });
+
+  /**
+   * topics default — GitHub may omit topics in some responses.
+   * Asserts the mapped output normalises missing topics to [].
+   */
+  it("defaults missing topics to an empty array", async () => {
+    const repo = makeFullRepo();
+    delete (repo as any).topics;
+    mock.mockResolvedValueOnce(repo);
+
+    const result = await getRepository("alice", "my-repo");
+
+    expect(result.topics).toEqual([]);
   });
 });

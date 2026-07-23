@@ -4,6 +4,7 @@ jest.mock("../../src/github/client", () => ({
 
 import { githubRequest } from "../../src/github/client";
 import {
+  addPullRequestComment,
   listOpenPullRequests,
   getPullRequest,
   listPullRequestFiles,
@@ -41,6 +42,76 @@ function makePR(overrides: Partial<Record<string, unknown>> = {}) {
     ...overrides,
   };
 }
+
+/**
+ * addPullRequestComment
+ *
+ * Posts a conversation comment on a pull request using the
+ * /issues/:number/comments endpoint, not the inline review comments endpoint.
+ * Maps the returned comment to a flat shape with author from user.login.
+ */
+describe("addPullRequestComment", () => {
+  function makeComment(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: 55,
+      body: "Looks good!",
+      html_url: "https://github.com/owner/repo/pull/10#issuecomment-55",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      user: { login: "bob" },
+      ...overrides,
+    };
+  }
+
+  /**
+   * Return shape — verifies the created comment is mapped correctly.
+   */
+  it("maps created PR comment fields correctly", async () => {
+    mock.mockResolvedValueOnce(makeComment());
+
+    const result = await addPullRequestComment(
+      "owner",
+      "repo",
+      10,
+      "Looks good!",
+    );
+
+    expect(result).toMatchObject({
+      id: 55,
+      body: "Looks good!",
+      html_url: "https://github.com/owner/repo/pull/10#issuecomment-55",
+      author: "bob",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+  });
+
+  /**
+   * Uses issues endpoint — PR conversation comments are created via
+   * /issues/:number/comments, not /pulls/:number/comments.
+   */
+  it("posts to the issues comments endpoint", async () => {
+    mock.mockResolvedValueOnce(makeComment());
+
+    await addPullRequestComment("owner", "repo", 10, "Looks good!");
+
+    const url = (mock as jest.Mock).mock.calls[0][0] as string;
+    expect(url).toContain("/issues/10/comments");
+  });
+
+  /**
+   * POST JSON body — asserts the request uses POST and sends only the body field.
+   */
+  it("uses POST with a JSON body", async () => {
+    mock.mockResolvedValueOnce(makeComment());
+
+    await addPullRequestComment("owner", "repo", 10, "Looks good!");
+
+    const [, options] = (mock as jest.Mock).mock.calls[0];
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ body: "Looks good!" });
+  });
+});
 
 /**
  * listOpenPullRequests

@@ -94,6 +94,33 @@ function mapPullRequest(pr: GitHubPullRequest) {
   };
 }
 
+export async function addPullRequestComment(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  body: string,
+) {
+  // PR conversation comments are created via the issues comments endpoint.
+  const comment = await githubRequest<GitHubConversationComment>(
+    `/repos/${owner}/${repo}/issues/${pullNumber}/comments`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+      owner,
+    },
+  );
+
+  return {
+    id: comment.id,
+    body: comment.body,
+    html_url: comment.html_url,
+    author: comment.user.login,
+    created_at: comment.created_at,
+    updated_at: comment.updated_at,
+  };
+}
+
 export async function listOpenPullRequests(owner: string, repo: string) {
   const prs = await githubRequest<GitHubPullRequest[]>(
     `/repos/${owner}/${repo}/pulls?state=open&per_page=100`,

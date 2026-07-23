@@ -7,12 +7,15 @@ jest.mock("../../src/github/client", () => ({
 
 import { githubRequest } from "../../src/github/client";
 import {
+  batchUpsertFiles,
+  createCommit,
+  deleteFile,
   getFileContents,
+  getFileRaw,
   getMultipleFiles,
   listDirectory,
-  upsertFile,
   patchFile,
-  deleteFile,
+  upsertFile,
 } from "../../src/github/files";
 
 const mockGithubRequest = githubRequest as jest.MockedFunction<
@@ -139,6 +142,40 @@ describe("getFileContents", () => {
 
     const url = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
     expect(url).toContain("ref=feat%2Fmy-branch");
+  });
+});
+
+/**
+ * getFileRaw
+ *
+ * Fetches a single file by path and returns only the decoded raw text content.
+ * Throws AppError when the path resolves to a directory rather than a file.
+ */
+describe("getFileRaw", () => {
+  it("returns the decoded raw string content", async () => {
+    mockGithubRequest.mockResolvedValueOnce(
+      makeGitHubFile("export const value = 1;", "src/value.ts"),
+    );
+
+    const result = await getFileRaw("owner", "repo", "src/value.ts");
+
+    expect(result).toBe("export const value = 1;");
+  });
+
+  it("throws when the path is not a file", async () => {
+    mockGithubRequest.mockResolvedValueOnce({
+      type: "dir",
+      name: "src",
+      path: "src",
+      sha: "abc",
+      size: 0,
+      encoding: "none",
+      content: "",
+    });
+
+    await expect(getFileRaw("owner", "repo", "src")).rejects.toThrow(
+      "Path is not a file: src",
+    );
   });
 });
 
@@ -316,7 +353,6 @@ describe("listDirectory", () => {
    * with a message identifying the bad path.
    */
   it("throws AppError when the path is a file not a directory", async () => {
-    // GitHub returns a single object for files, not an array
     mockGithubRequest.mockResolvedValueOnce(
       makeGitHubFile("content", "src/index.ts"),
     );
@@ -327,7 +363,7 @@ describe("listDirectory", () => {
   });
 
   /**
-   * Root path — calling with path="" lists the repo root.
+   * Root path — calling with path=\"\" lists the repo root.
    * Asserts the URL sent to githubRequest uses /contents (no trailing slash)
    * rather than /contents/ which would 404.
    */
@@ -408,8 +444,8 @@ describe("upsertFile", () => {
    */
   it("creates a new file and returns created: true when file does not exist", async () => {
     mockGithubRequest
-      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404)) // GET existing
-      .mockResolvedValueOnce(makeUpsertResponse()); // PUT
+      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
+      .mockResolvedValueOnce(makeUpsertResponse());
 
     const result = await upsertFile("owner", "repo", upsertInput);
 
@@ -425,15 +461,15 @@ describe("upsertFile", () => {
    */
   it("updates an existing file and returns created: false when file exists", async () => {
     mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("old content", upsertInput.path)) // GET existing
-      .mockResolvedValueOnce(makeUpsertResponse()); // PUT
+      .mockResolvedValueOnce(makeGitHubFile("old content", upsertInput.path))
+      .mockResolvedValueOnce(makeUpsertResponse());
 
     const result = await upsertFile("owner", "repo", upsertInput);
 
     expect(result.created).toBe(false);
     const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
     const body = JSON.parse(options.body);
-    expect(body.sha).toBe("abc123"); // sha from makeGitHubFile
+    expect(body.sha).toBe("abc123");
   });
 
   /**
@@ -509,6 +545,259 @@ describe("upsertFile", () => {
 });
 
 /**
+ * batchUpsertFiles / createCommit
+ *
+ * Creates multiple blobs, builds a tree from the branch's current base tree,
+ * creates a commit, and advances the branch ref. createCommit is an alias
+ * of batchUpsertFiles and should share the same implementation.
+ */
+describe("batchUpsertFiles", () => {
+  const input = {
+    branch: "main",
+    message: "feat: batch update",
+    files: [
+      { path: "src/a.ts", content: "export const a = 1;\n" },
+      { path: "src/b.ts", content: "export const b = 2;\n" },
+    ],
+  };
+
+  it("creates blobs, a tree, a commit, and updates the branch ref", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce({ object: { sha: "base-commit-sha" } })
+      .mockResolvedValueOnce({
+        sha: "base-commit-sha",
+        tree: { sha: "base-tree-sha" },
+      })
+      .mockResolvedValueOnce({ sha: "blob-sha-1" })
+      .mockResolvedValueOnce({ sha: "blob-sha-2" })
+      .mockResolvedValueOnce({
+        sha: "new-tree-sha",
+        url: "https://api.github.com/repos/owner/repo/git/trees/new-tree-sha",
+      })
+      .mockResolvedValueOnce({
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      })
+      .mockResolvedValueOnce({
+        ref: "refs/heads/main",
+        object: { sha: "new-commit-sha" },
+      });
+
+    const result = await batchUpsertFiles("owner", "repo", input);
+
+    expect(result).toEqual({
+      commit: {
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      },
+      filesCommitted: 2,
+      branch: "main",
+    });
+
+    expect(mockGithubRequest).toHaveBeenCalledTimes(7);
+  });
+
+  it("uses the branch ref endpoint first", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce({ object: { sha: "base-commit-sha" } })
+      .mockResolvedValueOnce({
+        sha: "base-commit-sha",
+        tree: { sha: "base-tree-sha" },
+      })
+      .mockResolvedValueOnce({ sha: "blob-sha-1" })
+      .mockResolvedValueOnce({ sha: "blob-sha-2" })
+      .mockResolvedValueOnce({ sha: "new-tree-sha", url: "x" })
+      .mockResolvedValueOnce({
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      })
+      .mockResolvedValueOnce({
+        ref: "refs/heads/main",
+        object: { sha: "new-commit-sha" },
+      });
+
+    await batchUpsertFiles("owner", "repo", input);
+
+    const firstUrl = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
+    expect(firstUrl).toContain("/git/refs/heads/main");
+  });
+
+  it("fetches the base commit to resolve the base tree SHA", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce({ object: { sha: "base-commit-sha" } })
+      .mockResolvedValueOnce({
+        sha: "base-commit-sha",
+        tree: { sha: "base-tree-sha" },
+      })
+      .mockResolvedValueOnce({ sha: "blob-sha-1" })
+      .mockResolvedValueOnce({ sha: "blob-sha-2" })
+      .mockResolvedValueOnce({ sha: "new-tree-sha", url: "x" })
+      .mockResolvedValueOnce({
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      })
+      .mockResolvedValueOnce({
+        ref: "refs/heads/main",
+        object: { sha: "new-commit-sha" },
+      });
+
+    await batchUpsertFiles("owner", "repo", input);
+
+    const secondUrl = (mockGithubRequest as jest.Mock).mock.calls[1][0] as string;
+    expect(secondUrl).toContain("/git/commits/base-commit-sha");
+  });
+
+  it("base64-encodes each file when creating blobs", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce({ object: { sha: "base-commit-sha" } })
+      .mockResolvedValueOnce({
+        sha: "base-commit-sha",
+        tree: { sha: "base-tree-sha" },
+      })
+      .mockResolvedValueOnce({ sha: "blob-sha-1" })
+      .mockResolvedValueOnce({ sha: "blob-sha-2" })
+      .mockResolvedValueOnce({ sha: "new-tree-sha", url: "x" })
+      .mockResolvedValueOnce({
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      })
+      .mockResolvedValueOnce({
+        ref: "refs/heads/main",
+        object: { sha: "new-commit-sha" },
+      });
+
+    await batchUpsertFiles("owner", "repo", input);
+
+    const [, blob1Options] = (mockGithubRequest as jest.Mock).mock.calls[2];
+    const [, blob2Options] = (mockGithubRequest as jest.Mock).mock.calls[3];
+
+    const blob1Body = JSON.parse(blob1Options.body);
+    const blob2Body = JSON.parse(blob2Options.body);
+
+    expect(Buffer.from(blob1Body.content, "base64").toString("utf8")).toBe(
+      input.files[0]!.content,
+    );
+    expect(Buffer.from(blob2Body.content, "base64").toString("utf8")).toBe(
+      input.files[1]!.content,
+    );
+    expect(blob1Body.encoding).toBe("base64");
+    expect(blob2Body.encoding).toBe("base64");
+  });
+
+  it("uses the resolved base tree SHA when creating the tree", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce({ object: { sha: "base-commit-sha" } })
+      .mockResolvedValueOnce({
+        sha: "base-commit-sha",
+        tree: { sha: "base-tree-sha" },
+      })
+      .mockResolvedValueOnce({ sha: "blob-sha-1" })
+      .mockResolvedValueOnce({ sha: "blob-sha-2" })
+      .mockResolvedValueOnce({ sha: "new-tree-sha", url: "x" })
+      .mockResolvedValueOnce({
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      })
+      .mockResolvedValueOnce({
+        ref: "refs/heads/main",
+        object: { sha: "new-commit-sha" },
+      });
+
+    await batchUpsertFiles("owner", "repo", input);
+
+    const [, treeOptions] = (mockGithubRequest as jest.Mock).mock.calls[4];
+    const treeBody = JSON.parse(treeOptions.body);
+
+    expect(treeBody.base_tree).toBe("base-tree-sha");
+    expect(treeBody.tree).toEqual([
+      {
+        path: "src/a.ts",
+        mode: "100644",
+        type: "blob",
+        sha: "blob-sha-1",
+      },
+      {
+        path: "src/b.ts",
+        mode: "100644",
+        type: "blob",
+        sha: "blob-sha-2",
+      },
+    ]);
+  });
+
+  it("uses the base commit SHA as the commit parent", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce({ object: { sha: "base-commit-sha" } })
+      .mockResolvedValueOnce({
+        sha: "base-commit-sha",
+        tree: { sha: "base-tree-sha" },
+      })
+      .mockResolvedValueOnce({ sha: "blob-sha-1" })
+      .mockResolvedValueOnce({ sha: "blob-sha-2" })
+      .mockResolvedValueOnce({ sha: "new-tree-sha", url: "x" })
+      .mockResolvedValueOnce({
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      })
+      .mockResolvedValueOnce({
+        ref: "refs/heads/main",
+        object: { sha: "new-commit-sha" },
+      });
+
+    await batchUpsertFiles("owner", "repo", input);
+
+    const [, commitOptions] = (mockGithubRequest as jest.Mock).mock.calls[5];
+    const commitBody = JSON.parse(commitOptions.body);
+
+    expect(commitBody.parents).toEqual(["base-commit-sha"]);
+    expect(commitBody.tree).toBe("new-tree-sha");
+    expect(commitBody.message).toBe("feat: batch update");
+  });
+
+  it("updates the branch ref to the new commit SHA", async () => {
+    mockGithubRequest
+      .mockResolvedValueOnce({ object: { sha: "base-commit-sha" } })
+      .mockResolvedValueOnce({
+        sha: "base-commit-sha",
+        tree: { sha: "base-tree-sha" },
+      })
+      .mockResolvedValueOnce({ sha: "blob-sha-1" })
+      .mockResolvedValueOnce({ sha: "blob-sha-2" })
+      .mockResolvedValueOnce({ sha: "new-tree-sha", url: "x" })
+      .mockResolvedValueOnce({
+        sha: "new-commit-sha",
+        html_url: "https://github.com/owner/repo/commit/new-commit-sha",
+        message: "feat: batch update",
+      })
+      .mockResolvedValueOnce({
+        ref: "refs/heads/main",
+        object: { sha: "new-commit-sha" },
+      });
+
+    await batchUpsertFiles("owner", "repo", input);
+
+    const updateUrl = (mockGithubRequest as jest.Mock).mock.calls[6][0] as string;
+    const [, updateOptions] = (mockGithubRequest as jest.Mock).mock.calls[6];
+    const updateBody = JSON.parse(updateOptions.body);
+
+    expect(updateUrl).toContain("/git/refs/heads/main");
+    expect(updateOptions.method).toBe("PATCH");
+    expect(updateBody).toEqual({ sha: "new-commit-sha" });
+  });
+
+  it("createCommit is an alias of batchUpsertFiles", () => {
+    expect(createCommit).toBe(batchUpsertFiles);
+  });
+});
+
+/**
  * deleteFile
  *
  * Deletes a file by first fetching its SHA (required by the GitHub Contents
@@ -538,8 +827,8 @@ describe("deleteFile", () => {
    */
   it("returns deleted: true and commit detail when the file exists", async () => {
     mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path)) // GET sha
-      .mockResolvedValueOnce(makeDeleteResponse()); // DELETE
+      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path))
+      .mockResolvedValueOnce(makeDeleteResponse());
 
     const result = await deleteFile("owner", "repo", deleteInput);
 
@@ -562,7 +851,7 @@ describe("deleteFile", () => {
 
     const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
     const body = JSON.parse(options.body);
-    expect(body.sha).toBe("abc123"); // sha from makeGitHubFile
+    expect(body.sha).toBe("abc123");
   });
 
   /**
@@ -770,7 +1059,7 @@ describe("patchFile", () => {
 
     const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
     const body = JSON.parse(options.body);
-    expect(body.sha).toBe("abc123"); // sha from makeGitHubFile
+    expect(body.sha).toBe("abc123");
   });
 
   /**
