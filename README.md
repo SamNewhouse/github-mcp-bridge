@@ -16,6 +16,58 @@ MCP Client  ──bearer token──▶  github-mcp-bridge  ──GitHub PAT─�
 
 The bridge also exposes `tools/list` so any client can discover all available tools and their input schemas at runtime — no manual tool configuration needed.
 
+## ⚠️ Required Parameters for MCP Clients
+
+**All tools (except `list_repositories`) require `owner` and `repo` parameters.** These are mandatory fields in every tool's input schema.
+
+### Example Tool Call
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "list_branches",
+    "arguments": {
+      "owner": "SamNewhouse",
+      "repo": "github-mcp-bridge"
+    }
+  }
+}
+```
+
+### Common Mistake
+
+❌ **Wrong** - Missing required parameters:
+```json
+{
+  "name": "list_branches",
+  "arguments": {}
+}
+```
+
+✅ **Correct** - Include owner and repo:
+```json
+{
+  "name": "list_branches",
+  "arguments": {
+    "owner": "SamNewhouse",
+    "repo": "github-mcp-bridge"
+  }
+}
+```
+
+### Why These Are Required
+
+1. **GitHub API Design** - Every GitHub endpoint is `/repos/{owner}/{repo}/...`
+2. **Multi-PAT Support** - The `owner` parameter selects the correct `GITHUB_PAT_<OWNER>` environment variable
+3. **Explicit Repository Targeting** - Prevents accidental operations on wrong repositories
+
+### Exception
+
+Only `list_repositories` does not require `owner` and `repo` — it lists all repositories accessible to the configured PAT.
+
 ## Available tools
 
 ### Repositories
