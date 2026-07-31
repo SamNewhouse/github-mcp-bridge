@@ -58,11 +58,20 @@ The bridge also exposes `tools/list` so any client can discover all available to
 }
 ```
 
-### Why These Are Required
+### Strict Validation
 
-1. **GitHub API Design** - Every GitHub endpoint is `/repos/{owner}/{repo}/...`
-2. **Multi-PAT Support** - The `owner` parameter selects the correct `GITHUB_PAT_<OWNER>` environment variable
-3. **Explicit Repository Targeting** - Prevents accidental operations on wrong repositories
+The server performs strict validation and will reject tool calls that don't include both `owner` and `repo`. This is intentional to:
+
+1. **Prevent accidental operations** on wrong repositories
+2. **Enable multi-PAT support** - the `owner` selects the correct `GITHUB_PAT_<OWNER>` environment variable
+3. **Match GitHub API requirements** - all GitHub endpoints require both parameters
+
+If you see errors like:
+```
+Missing required parameters: 'owner' and 'repo'
+```
+
+You need to add these parameters to your tool calls. There are no defaults or fallbacks.
 
 ### Exception
 
