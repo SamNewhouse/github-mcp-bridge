@@ -85,8 +85,12 @@ export async function postSessionJsonRpc(body: JsonRpcBody) {
   return postJsonRpc(body, { sessionId: activeSessionId });
 }
 
+export async function postAutoSessionJsonRpc(body: JsonRpcBody) {
+  return postJsonRpc(body);
+}
+
 export async function callTool(name: string, input: Record<string, unknown>) {
-  const res = await postSessionJsonRpc({
+  const res = await postAutoSessionJsonRpc({
     jsonrpc: "2.0",
     id: jsonRpcId(),
     method: "tools/call",
@@ -102,7 +106,7 @@ export async function callToolRaw(
   name: string,
   input: Record<string, unknown>,
 ) {
-  const res = await postSessionJsonRpc({
+  const res = await postAutoSessionJsonRpc({
     jsonrpc: "2.0",
     id: jsonRpcId(),
     method: "tools/call",

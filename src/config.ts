@@ -27,18 +27,35 @@ function getEnv(): Env {
   return cachedEnv;
 }
 
+function getOptionalPositiveIntEnv(
+  key: string,
+  fallback: number,
+): number {
+  const raw = process.env[key];
+
+  if (raw === undefined || raw.trim() === "") {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    logWarn("invalid_optional_env", {
+      key,
+      value: raw,
+      fallback,
+      message: `${key} must be a positive integer; using fallback`,
+    });
+    return fallback;
+  }
+
+  return parsed;
+}
+
 export function getGithubPat(): string {
   return getEnv().GITHUB_PAT;
 }
 
-/**
- * Validates all GITHUB_PAT_* environment variables at startup.
- * Logs a warning for any that are present but empty/whitespace — these
- * would silently fall back to the default PAT at request time, which is
- * likely a misconfiguration.
- *
- * Call this once during server startup after the env has been parsed.
- */
 export function validateGithubPats(): void {
   for (const [key, val] of Object.entries(process.env)) {
     if (key.startsWith("GITHUB_PAT_") && (!val || val.trim().length === 0)) {
@@ -51,20 +68,6 @@ export function validateGithubPats(): void {
   }
 }
 
-/**
- * Returns the GitHub PAT to use for a given owner (user or organisation).
- *
- * Resolution order:
- *   1. GITHUB_PAT_<OWNER> — owner-specific PAT. The owner name is uppercased
- *      and hyphens are replaced with underscores to produce a valid env var name.
- *      e.g. owner "SamNewhouse"  → GITHUB_PAT_SAMNEWHOUSE
- *           owner "Kelvast"      → GITHUB_PAT_KELVAST
- *           owner "my-org"       → GITHUB_PAT_MY_ORG
- *   2. GITHUB_PAT — the default fallback PAT used when no owner-specific
- *      variable is set.
- *
- * Add as many GITHUB_PAT_* variables as you need — no other config required.
- */
 export function getGithubPatForOwner(owner: string): {
   pat: string;
   key: string;
@@ -81,11 +84,6 @@ export function getConnectorSecret(): string {
   return getEnv().CONNECTOR_SECRET;
 }
 
-/**
- * Returns all valid secrets as an array to support zero-downtime rotation.
- * CONNECTOR_SECRET may be a comma-separated list (e.g. "newSecret,oldSecret").
- * Each entry is trimmed and empty entries are discarded.
- */
 export function getConnectorSecrets(): string[] {
   return getEnv()
     .CONNECTOR_SECRET.split(",")
@@ -95,4 +93,18 @@ export function getConnectorSecrets(): string[] {
 
 export function getPort(): number {
   return getEnv().PORT;
+}
+
+export function getMcpSessionIdleTtlMs(): number {
+  return getOptionalPositiveIntEnv(
+    "MCP_SESSION_IDLE_TTL_MS",
+    2 * 60 * 60 * 1000,
+  );
+}
+
+export function getMcpSessionMaxTtlMs(): number {
+  return getOptionalPositiveIntEnv(
+    "MCP_SESSION_MAX_TTL_MS",
+    12 * 60 * 60 * 1000,
+  );
 }

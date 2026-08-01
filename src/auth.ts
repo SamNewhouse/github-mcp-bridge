@@ -35,8 +35,6 @@ function getApiKeyHeader(header: string | string[] | undefined): string | null {
 
 /**
  * Constant-time string equality check to prevent timing side-channel attacks.
- * Returns false immediately if lengths differ (length is not secret), then
- * compares bytes in constant time using crypto.timingSafeEqual.
  */
 function secretsEqual(a: string, b: string): boolean {
   if (a.length !== b.length) {
@@ -46,10 +44,10 @@ function secretsEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
 }
 
-export function assertAuthorized(
+export function getAuthorizedPrincipal(
   req: http.IncomingMessage,
   log?: RequestLogger,
-): void {
+): string {
   const authHeader = req.headers.authorization;
   const bearerToken = getBearerToken(authHeader);
   const apiKey = getApiKeyHeader(req.headers["x-api-key"]);
@@ -66,9 +64,6 @@ export function assertAuthorized(
     throw new AppError("Unauthorized", 401);
   }
 
-  // Support rotation: CONNECTOR_SECRET may be a comma-separated list of valid
-  // secrets (e.g. "newSecret,oldSecret"). A request is authorized if it matches
-  // any of them. Remove the old secret once all clients have rotated.
   const validSecrets = getConnectorSecrets();
   const isAuthorized = validSecrets.some((expected) =>
     secretsEqual(providedSecret, expected),
@@ -83,4 +78,13 @@ export function assertAuthorized(
 
     throw new AppError("Unauthorized", 401);
   }
+
+  return crypto.createHash("sha256").update(providedSecret).digest("hex");
+}
+
+export function assertAuthorized(
+  req: http.IncomingMessage,
+  log?: RequestLogger,
+): void {
+  getAuthorizedPrincipal(req, log);
 }

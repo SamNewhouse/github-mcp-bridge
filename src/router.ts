@@ -1,6 +1,6 @@
 import * as http from "node:http";
 import { z } from "zod";
-import { assertAuthorized } from "./auth";
+import { assertAuthorized, getAuthorizedPrincipal } from "./auth";
 import {
   getClientIp,
   isRateLimited,
@@ -18,6 +18,7 @@ import {
 import { createRequestLogger } from "./lib/logging";
 import {
   createSession,
+  getOrCreateSessionForPrincipal,
   getSessionIdFromHeaders,
   touchSession,
   validateSession,
@@ -26,12 +27,6 @@ import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
 
-// -32700 Parse error
-// -32600 Invalid Request
-// -32601 Method not found
-// -32602 Invalid params
-// -32603 Internal error
-// -32001 Unauthorized (custom server error)
 const RPC_UNAUTHORIZED = -32001;
 const SUPPORTED_PROTOCOL_VERSION = "2025-03-26";
 
@@ -98,15 +93,8 @@ function sendSplashPage(res: http.ServerResponse): void {
   res.end(html);
 }
 
-function resolveProtocolVersion(params: unknown): string {
-  if (!params || typeof params !== "object") {
-    return SUPPORTED_PROTOCOL_VERSION;
-  }
-
-  const requested = (params as Record<string, unknown>).protocolVersion;
-  return requested === SUPPORTED_PROTOCOL_VERSION
-    ? SUPPORTED_PROTOCOL_VERSION
-    : SUPPORTED_PROTOCOL_VERSION;
+function resolveProtocolVersion(_: unknown): string {
+  return SUPPORTED_PROTOCOL_VERSION;
 }
 
 export async function handleMcpRequest(
@@ -179,8 +167,10 @@ export async function handleMcpRequest(
       );
     }
 
+    let principal: string;
+
     try {
-      assertAuthorized(req, log);
+      principal = getAuthorizedPrincipal(req, log);
       recordAuthSuccess(clientIp);
     } catch {
       recordAuthFailure(clientIp);
@@ -188,10 +178,16 @@ export async function handleMcpRequest(
     }
 
     if (req.method === "GET") {
+      const sessionId = getOrCreateSessionForPrincipal(principal);
+
       return sendJson(res, 200, {
         name: "github-mcp-bridge",
         version: "0.1.0",
         tools: getToolList(),
+        session: {
+          active: true,
+          sessionId,
+        },
       });
     }
 
@@ -219,7 +215,7 @@ export async function handleMcpRequest(
     const body = parsed.data;
 
     if (body.method === "initialize") {
-      const sessionId = createSession();
+      const sessionId = createSession(principal);
       const protocolVersion = resolveProtocolVersion(body.params);
 
       log.info("mcp_session_initialized", {
@@ -240,57 +236,30 @@ export async function handleMcpRequest(
       );
     }
 
+    const requestedSessionId = getSessionIdFromHeaders(req.headers);
+    const sessionId =
+      requestedSessionId && validateSession(requestedSessionId, principal)
+        ? requestedSessionId
+        : getOrCreateSessionForPrincipal(principal);
+
+    touchSession(sessionId);
+
     if (body.method === "ping") {
-      const sessionId = getSessionIdFromHeaders(req.headers);
-
-      if (!sessionId || !validateSession(sessionId)) {
-        return sendJsonRpcError(
-          res,
-          body.id ?? null,
-          RPC_UNAUTHORIZED,
-          "Invalid or missing MCP session",
-          { reason: "invalid_session" },
-        );
-      }
-
-      touchSession(sessionId);
       return sendJsonRpcResultWithSession(res, body.id ?? null, {}, sessionId);
     }
 
     if (body.method === "notifications/initialized") {
-      const sessionId = getSessionIdFromHeaders(req.headers);
-
-      if (!sessionId || !validateSession(sessionId)) {
-        res.statusCode = 401;
-        res.end();
-        return;
-      }
-
-      touchSession(sessionId);
       res.statusCode = 202;
       res.setHeader("mcp-session-id", sessionId);
       res.end();
       return;
     }
 
-    const sessionId = getSessionIdFromHeaders(req.headers);
-
-    if (!sessionId || !validateSession(sessionId)) {
-      return sendJsonRpcError(
-        res,
-        body.id ?? null,
-        RPC_UNAUTHORIZED,
-        "Invalid or missing MCP session",
-        { reason: "invalid_session" },
-      );
-    }
-
-    touchSession(sessionId);
-
     if (body.method === "tools/list") {
       log.info("tools_list_requested", {
         id: body.id ?? null,
         sessionId,
+        autoResumed: requestedSessionId !== sessionId,
       });
       return sendJsonRpcResultWithSession(
         res,

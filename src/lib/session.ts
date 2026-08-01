@@ -1,47 +1,136 @@
 import * as crypto from "node:crypto";
 import type * as http from "node:http";
-
-const SESSION_TTL_MS = 30 * 60 * 1000;
+import {
+  getMcpSessionIdleTtlMs,
+  getMcpSessionMaxTtlMs,
+} from "../config";
 
 type SessionRecord = {
+  principal: string;
+  createdAt: number;
+  lastSeenAt: number;
   expiresAt: number;
 };
 
 const sessions = new Map<string, SessionRecord>();
+const principalToSessionId = new Map<string, string>();
 
 function now(): number {
   return Date.now();
+}
+
+function isExpired(session: SessionRecord, timestamp: number): boolean {
+  const maxAgeMs = getMcpSessionMaxTtlMs();
+  return (
+    session.expiresAt <= timestamp ||
+    session.createdAt + maxAgeMs <= timestamp
+  );
+}
+
+function deleteSession(sessionId: string): void {
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return;
+  }
+
+  sessions.delete(sessionId);
+  const current = principalToSessionId.get(session.principal);
+  if (current === sessionId) {
+    principalToSessionId.delete(session.principal);
+  }
 }
 
 function pruneExpiredSessions(): void {
   const timestamp = now();
 
   for (const [sessionId, session] of sessions.entries()) {
-    if (session.expiresAt <= timestamp) {
-      sessions.delete(sessionId);
+    if (isExpired(session, timestamp)) {
+      deleteSession(sessionId);
     }
   }
 }
 
-export function createSession(): string {
+export function createSession(principal: string): string {
   pruneExpiredSessions();
+
+  const existingSessionId = principalToSessionId.get(principal);
+  if (existingSessionId) {
+    const existing = sessions.get(existingSessionId);
+    if (existing && !isExpired(existing, now())) {
+      touchSession(existingSessionId);
+      return existingSessionId;
+    }
+
+    deleteSession(existingSessionId);
+  }
+
+  const timestamp = now();
   const sessionId = crypto.randomUUID();
-  sessions.set(sessionId, { expiresAt: now() + SESSION_TTL_MS });
+
+  sessions.set(sessionId, {
+    principal,
+    createdAt: timestamp,
+    lastSeenAt: timestamp,
+    expiresAt: timestamp + getMcpSessionIdleTtlMs(),
+  });
+  principalToSessionId.set(principal, sessionId);
+
   return sessionId;
 }
 
-export function validateSession(sessionId: string): boolean {
+export function getOrCreateSessionForPrincipal(principal: string): string {
   pruneExpiredSessions();
-  const session = sessions.get(sessionId);
-  return Boolean(session && session.expiresAt > now());
+
+  const existingSessionId = principalToSessionId.get(principal);
+  if (!existingSessionId) {
+    return createSession(principal);
+  }
+
+  const existing = sessions.get(existingSessionId);
+  if (!existing || isExpired(existing, now())) {
+    deleteSession(existingSessionId);
+    return createSession(principal);
+  }
+
+  touchSession(existingSessionId);
+  return existingSessionId;
 }
 
-export function touchSession(sessionId: string): boolean {
-  if (!validateSession(sessionId)) {
+export function validateSession(sessionId: string, principal?: string): boolean {
+  pruneExpiredSessions();
+
+  const session = sessions.get(sessionId);
+  if (!session || isExpired(session, now())) {
+    if (session) {
+      deleteSession(sessionId);
+    }
     return false;
   }
 
-  sessions.set(sessionId, { expiresAt: now() + SESSION_TTL_MS });
+  if (principal && session.principal !== principal) {
+    return false;
+  }
+
+  return true;
+}
+
+export function touchSession(sessionId: string): boolean {
+  pruneExpiredSessions();
+
+  const session = sessions.get(sessionId);
+  if (!session || isExpired(session, now())) {
+    if (session) {
+      deleteSession(sessionId);
+    }
+    return false;
+  }
+
+  sessions.set(sessionId, {
+    ...session,
+    lastSeenAt: now(),
+    expiresAt: now() + getMcpSessionIdleTtlMs(),
+  });
+
   return true;
 }
 

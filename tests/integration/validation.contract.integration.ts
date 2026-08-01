@@ -1,7 +1,11 @@
-import { describe, expect, test } from "@jest/globals";
-import { callToolRaw, OWNER, REPO } from "./helpers";
+import { beforeEach, describe, expect, test } from "@jest/globals";
+import { callToolRaw, OWNER, REPO, resetSession } from "./helpers";
 
 describe("validation contract", () => {
+  beforeEach(() => {
+    resetSession();
+  });
+
   test("rejects list_branches without repo", async () => {
     const json = await callToolRaw("list_branches", { owner: OWNER });
 
