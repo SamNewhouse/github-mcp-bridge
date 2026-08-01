@@ -12,8 +12,6 @@ const envSchema = z.object({
       "CONNECTOR_SECRET must be at least 32 characters — generate one with: openssl rand -hex 32",
     ),
   PORT: z.coerce.number().int().positive().default(3000),
-  MCP_SESSION_IDLE_TTL_MS: z.coerce.number().int().positive().default(2 * 60 * 60 * 1000),
-  MCP_SESSION_MAX_TTL_MS: z.coerce.number().int().positive().default(12 * 60 * 60 * 1000),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -27,6 +25,31 @@ function getEnv(): Env {
 
   cachedEnv = parseEnv(envSchema, { label: "application environment" });
   return cachedEnv;
+}
+
+function getOptionalPositiveIntEnv(
+  key: string,
+  fallback: number,
+): number {
+  const raw = process.env[key];
+
+  if (raw === undefined || raw.trim() === "") {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    logWarn("invalid_optional_env", {
+      key,
+      value: raw,
+      fallback,
+      message: `${key} must be a positive integer; using fallback`,
+    });
+    return fallback;
+  }
+
+  return parsed;
 }
 
 export function getGithubPat(): string {
@@ -73,9 +96,15 @@ export function getPort(): number {
 }
 
 export function getMcpSessionIdleTtlMs(): number {
-  return getEnv().MCP_SESSION_IDLE_TTL_MS;
+  return getOptionalPositiveIntEnv(
+    "MCP_SESSION_IDLE_TTL_MS",
+    2 * 60 * 60 * 1000,
+  );
 }
 
 export function getMcpSessionMaxTtlMs(): number {
-  return getEnv().MCP_SESSION_MAX_TTL_MS;
+  return getOptionalPositiveIntEnv(
+    "MCP_SESSION_MAX_TTL_MS",
+    12 * 60 * 60 * 1000,
+  );
 }
