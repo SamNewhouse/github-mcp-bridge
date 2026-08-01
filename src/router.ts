@@ -13,9 +13,15 @@ import {
   readJsonBody,
   sendJson,
   sendJsonRpcError,
-  sendJsonRpcResult,
+  sendJsonRpcResultWithSession,
 } from "./lib/http";
 import { createRequestLogger } from "./lib/logging";
+import {
+  createSession,
+  getSessionIdFromHeaders,
+  touchSession,
+  validateSession,
+} from "./lib/session";
 import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
@@ -27,6 +33,7 @@ import type { McpToolResult } from "./tools/shared";
 // -32603 Internal error
 // -32001 Unauthorized (custom server error)
 const RPC_UNAUTHORIZED = -32001;
+const SUPPORTED_PROTOCOL_VERSION = "2025-03-26";
 
 const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -91,6 +98,17 @@ function sendSplashPage(res: http.ServerResponse): void {
   res.end(html);
 }
 
+function resolveProtocolVersion(params: unknown): string {
+  if (!params || typeof params !== "object") {
+    return SUPPORTED_PROTOCOL_VERSION;
+  }
+
+  const requested = (params as Record<string, unknown>).protocolVersion;
+  return requested === SUPPORTED_PROTOCOL_VERSION
+    ? SUPPORTED_PROTOCOL_VERSION
+    : SUPPORTED_PROTOCOL_VERSION;
+}
+
 export async function handleMcpRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -115,7 +133,6 @@ export async function handleMcpRequest(
       return sendJson(res, 200, { ok: true });
     }
 
-    // HEAD / — some MCP clients probe before connecting
     if (url.pathname === "/" && req.method === "HEAD") {
       try {
         assertAuthorized(req, log);
@@ -130,7 +147,6 @@ export async function handleMcpRequest(
       return;
     }
 
-    // Public splash page — no auth required for browsers
     if (url.pathname === "/" && req.method === "GET") {
       const acceptsHtml = req.headers.accept?.includes("text/html") ?? false;
 
@@ -203,32 +219,85 @@ export async function handleMcpRequest(
     const body = parsed.data;
 
     if (body.method === "initialize") {
-      const params =
-        body.params && typeof body.params === "object"
-          ? (body.params as Record<string, unknown>)
-          : {};
+      const sessionId = createSession();
+      const protocolVersion = resolveProtocolVersion(body.params);
 
-      const protocolVersion =
-        typeof params.protocolVersion === "string"
-          ? params.protocolVersion
-          : "2025-03-26";
-
-      return sendJsonRpcResult(res, body.id ?? null, {
+      log.info("mcp_session_initialized", {
+        id: body.id ?? null,
+        sessionId,
         protocolVersion,
-        capabilities: { tools: {} },
-        serverInfo: { name: "github-mcp-bridge", version: "0.1.0" },
       });
+
+      return sendJsonRpcResultWithSession(
+        res,
+        body.id ?? null,
+        {
+          protocolVersion,
+          capabilities: { tools: {} },
+          serverInfo: { name: "github-mcp-bridge", version: "0.1.0" },
+        },
+        sessionId,
+      );
+    }
+
+    if (body.method === "ping") {
+      const sessionId = getSessionIdFromHeaders(req.headers);
+
+      if (!sessionId || !validateSession(sessionId)) {
+        return sendJsonRpcError(
+          res,
+          body.id ?? null,
+          RPC_UNAUTHORIZED,
+          "Invalid or missing MCP session",
+          { reason: "invalid_session" },
+        );
+      }
+
+      touchSession(sessionId);
+      return sendJsonRpcResultWithSession(res, body.id ?? null, {}, sessionId);
     }
 
     if (body.method === "notifications/initialized") {
+      const sessionId = getSessionIdFromHeaders(req.headers);
+
+      if (!sessionId || !validateSession(sessionId)) {
+        res.statusCode = 401;
+        res.end();
+        return;
+      }
+
+      touchSession(sessionId);
       res.statusCode = 202;
+      res.setHeader("mcp-session-id", sessionId);
       res.end();
       return;
     }
 
+    const sessionId = getSessionIdFromHeaders(req.headers);
+
+    if (!sessionId || !validateSession(sessionId)) {
+      return sendJsonRpcError(
+        res,
+        body.id ?? null,
+        RPC_UNAUTHORIZED,
+        "Invalid or missing MCP session",
+        { reason: "invalid_session" },
+      );
+    }
+
+    touchSession(sessionId);
+
     if (body.method === "tools/list") {
-      log.info("tools_list_requested", { id: body.id ?? null });
-      return sendJsonRpcResult(res, body.id ?? null, { tools: getToolList() });
+      log.info("tools_list_requested", {
+        id: body.id ?? null,
+        sessionId,
+      });
+      return sendJsonRpcResultWithSession(
+        res,
+        body.id ?? null,
+        { tools: getToolList() },
+        sessionId,
+      );
     }
 
     if (body.method === "tools/call") {
@@ -239,6 +308,7 @@ export async function handleMcpRequest(
           id: body.id ?? null,
           method: body.method,
           issues: params.error.issues,
+          sessionId,
         });
         return sendJsonRpcError(
           res,
@@ -257,7 +327,12 @@ export async function handleMcpRequest(
       try {
         const result = await executeTool(toolName, toolArgs);
         const mcpResult = toMcpToolResult(result);
-        return sendJsonRpcResult(res, body.id ?? null, mcpResult);
+        return sendJsonRpcResultWithSession(
+          res,
+          body.id ?? null,
+          mcpResult,
+          sessionId,
+        );
       } catch (error) {
         const status = getErrorStatus(error);
         const message = getErrorMessage(error);
@@ -267,6 +342,7 @@ export async function handleMcpRequest(
           tool: toolName,
           status,
           message,
+          sessionId,
           errorName: error instanceof Error ? error.name : "UnknownError",
         });
 
@@ -312,6 +388,7 @@ export async function handleMcpRequest(
     log.warn("jsonrpc_method_not_found", {
       id: body.id ?? null,
       method: body.method,
+      sessionId,
     });
     return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
   } catch (error) {
