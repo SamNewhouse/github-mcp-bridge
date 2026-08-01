@@ -32,7 +32,11 @@ export function defineTool<TSchema extends z.ZodTypeAny>(config: {
     description: config.description,
     inputSchema: z.toJSONSchema(config.input) as Record<string, unknown>,
     run: async (input: unknown) => {
-      // Validate input is an object
+      if (config.name === "list_repositories") {
+        const parsed = config.input.parse(input);
+        return config.handler(parsed);
+      }
+
       if (!input || typeof input !== "object") {
         throw new AppError(
           "Tool arguments must be an object. All tools (except list_repositories) require both 'owner' and 'repo' parameters.",
@@ -40,7 +44,6 @@ export function defineTool<TSchema extends z.ZodTypeAny>(config: {
         );
       }
 
-      // Check for required repository parameters before parsing
       const args = input as Record<string, unknown>;
       const hasOwner = "owner" in args;
       const hasRepo = "repo" in args;
