@@ -20,7 +20,6 @@ import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
 
-// JSON-RPC error codes
 // -32700 Parse error
 // -32600 Invalid Request
 // -32601 Method not found
