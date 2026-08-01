@@ -1,20 +1,12 @@
 import { describe, expect, test } from "@jest/globals";
-import { callTool, OWNER, REPO } from "./helpers";
-
+import { callTool, OWNER, REPO, postSessionJsonRpc } from "./helpers";
 
 describe("smoke", () => {
   test("tools/list succeeds", async () => {
-    const res = await fetch(`http://localhost:${process.env.PORT ?? "3000"}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.CONNECTOR_SECRET!}`,
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/list",
-      }),
+    const res = await postSessionJsonRpc({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
     });
 
     const json = await res.json();

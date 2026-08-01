@@ -1,52 +1,9 @@
+import { callTool, callToolRaw } from "./helpers";
+
 const BASE_URL = `http://localhost:${process.env.PORT ?? "3000"}`;
 const SECRET = process.env.CONNECTOR_SECRET!;
 const OWNER = "SamNewhouse";
 const REPO = "github-mcp-bridge";
-
-async function callTool(name: string, input: Record<string, unknown>) {
-  const res = await fetch(BASE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SECRET}`,
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: { name, arguments: input },
-    }),
-  });
-
-  const json = await res.json();
-
-  if (json.error) {
-    throw new Error(`Tool error: ${JSON.stringify(json.error)}`);
-  }
-
-  return JSON.parse(json.result.content[0].text);
-}
-
-/**
- * Like callTool but returns the raw JSON-RPC response without throwing,
- * so tests can inspect error payloads directly.
- */
-async function callToolRaw(name: string, input: Record<string, unknown>) {
-  const res = await fetch(BASE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SECRET}`,
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: { name, arguments: input },
-    }),
-  });
-  return res.json();
-}
 
 describe("get_file_contents (integration)", () => {
   /**
