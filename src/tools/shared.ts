@@ -32,37 +32,18 @@ export function defineTool<TSchema extends z.ZodTypeAny>(config: {
     description: config.description,
     inputSchema: z.toJSONSchema(config.input) as Record<string, unknown>,
     run: async (input: unknown) => {
-      if (config.name === "list_repositories") {
-        const parsed = config.input.parse(input);
-        return config.handler(parsed);
-      }
-
       if (!input || typeof input !== "object") {
-        throw new AppError(
-          "Tool arguments must be an object. All tools (except list_repositories) require both 'owner' and 'repo' parameters.",
-          400,
-        );
+        throw new AppError("Tool arguments must be an object.", 400);
       }
 
-      const args = input as Record<string, unknown>;
-      const hasOwner = "owner" in args;
-      const hasRepo = "repo" in args;
-
-      if (!hasOwner || !hasRepo) {
-        const missing = [];
-        if (!hasOwner) missing.push("'owner'");
-        if (!hasRepo) missing.push("'repo'");
-
-        throw new AppError(
-          `Missing required parameters: ${missing.join(" and ")}. ` +
-            "All tools (except list_repositories) require both 'owner' and 'repo' parameters. " +
-            "Example: {\"owner\": \"SamNewhouse\", \"repo\": \"github-mcp-bridge\"}",
-          400,
-        );
+      const parsed = config.input.safeParse(input);
+      if (!parsed.success) {
+        throw new AppError("Invalid tool arguments", 400, {
+          cause: parsed.error,
+        });
       }
 
-      const parsed = config.input.parse(input);
-      return config.handler(parsed);
+      return config.handler(parsed.data);
     },
   };
 }
