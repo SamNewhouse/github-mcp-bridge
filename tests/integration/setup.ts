@@ -2,8 +2,6 @@ import { spawn, spawnSync, ChildProcess } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
 import { config } from "dotenv";
 
-// Load .env so CONNECTOR_SECRET and GITHUB_PAT are available to both
-// the test process and the spawned server process.
 config();
 
 export default async function globalSetup() {
@@ -14,7 +12,6 @@ export default async function globalSetup() {
     throw new Error("[setup] CONNECTOR_SECRET is required");
   }
 
-  // Build first so dist/server.js is guaranteed to exist before spawning.
   const build = spawnSync("npm run build", {
     shell: true,
     stdio: "inherit",
@@ -28,18 +25,18 @@ export default async function globalSetup() {
     env: {
       ...process.env,
       PORT: port,
+      MCP_SESSION_IDLE_TTL_MS: process.env.MCP_SESSION_IDLE_TTL_MS ?? "7200000",
+      MCP_SESSION_MAX_TTL_MS: process.env.MCP_SESSION_MAX_TTL_MS ?? "43200000",
     },
     stdio: "pipe",
   });
 
-  // Store on global so teardown.ts can access it
   (global as any).__integrationServer = server;
 
   server.stderr?.on("data", (data: Buffer) => {
     process.stderr.write(`[server] ${data.toString()}`);
   });
 
-  // Poll /health until the server is ready (max 10s)
   const url = `http://localhost:${port}/health`;
   const deadline = Date.now() + 10_000;
 
