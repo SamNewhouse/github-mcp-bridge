@@ -16,6 +16,67 @@ MCP Client  ──bearer token──▶  github-mcp-bridge  ──GitHub PAT─�
 
 The bridge also exposes `tools/list` so any client can discover all available tools and their input schemas at runtime — no manual tool configuration needed.
 
+## ⚠️ Required Parameters for MCP Clients
+
+**All repo-scoped tools require `owner` and `repo` parameters.** The only exception is `list_repositories`, which lists repositories accessible to the configured PAT and does not need repo coordinates.
+
+### Example Tool Call
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "list_branches",
+    "arguments": {
+      "owner": "SamNewhouse",
+      "repo": "github-mcp-bridge"
+    }
+  }
+}
+```
+
+### Common Mistake
+
+❌ **Wrong** - Missing required parameters:
+```json
+{
+  "name": "list_branches",
+  "arguments": {}
+}
+```
+
+✅ **Correct** - Include owner and repo:
+```json
+{
+  "name": "list_branches",
+  "arguments": {
+    "owner": "SamNewhouse",
+    "repo": "github-mcp-bridge"
+  }
+}
+```
+
+### Strict Validation
+
+The server performs strict validation and will reject repo-scoped tool calls that don't include both `owner` and `repo`. This is intentional to:
+
+1. **Prevent accidental operations** on wrong repositories.
+2. **Enable multi-PAT support** — the `owner` selects the correct `GITHUB_PAT_<OWNER>` environment variable.
+3. **Match GitHub API requirements** — all GitHub endpoints require both parameters.
+
+If you see errors like:
+```
+Missing required parameters: 'owner' and 'repo'
+```
+
+You need to add these parameters to your tool calls. There are no defaults or fallbacks for repo-scoped tools.
+
+### Exception
+
+`list_repositories` does not require `owner` and `repo` — it lists all repositories accessible to the configured PAT.
+
 ## Available tools
 
 ### Repositories
@@ -94,6 +155,25 @@ The bridge also exposes `tools/list` so any client can discover all available to
 | -------------- | -------------------------------------------------------------------------------- |
 | `search_code`  | Search for code within a repository — returns file paths and match fragments     |
 | `search_files` | Search for files by name or path pattern using the git tree (no query limits)    |
+
+## Testing
+
+The integration tests are split into smaller files to make maintenance safer and avoid giant-file update issues.
+
+### Integration files
+
+- `tests/integration/helpers.ts`
+- `tests/integration/repositories-branches.integration.ts`
+- `tests/integration/pull-requests.integration.ts`
+- `tests/integration/issues.integration.ts`
+- `tests/integration/commits-files.integration.ts`
+- `tests/integration/search-misc.integration.ts`
+- `tests/integration/truncation.integration.ts`
+
+### Truncation coverage
+
+- `get_file_contents` truncation is tested with a real file fixture.
+- `get_multiple_files` pagination is tested with `hasMore` and `nextCursor`.
 
 ## Getting started
 
