@@ -218,9 +218,14 @@ export async function handleMcpRequest(
       log.warn("jsonrpc_invalid_request", {
         issues: parsed.error.issues,
       });
-      return sendJsonRpcError(res, null, -32600, "Invalid Request", {
-        issues: parsed.error.issues,
-      });
+      return sendJsonRpcError(
+        res,
+        null,
+        -32600,
+        "Invalid Request",
+        { issues: parsed.error.issues },
+        400,
+      );
     }
 
     const body = parsed.data;
@@ -303,6 +308,7 @@ export async function handleMcpRequest(
           -32602,
           "Invalid params",
           { issues: params.error.issues },
+          400,
         );
       }
 
@@ -339,6 +345,7 @@ export async function handleMcpRequest(
             -32602,
             "Invalid params",
             { tool: toolName, message },
+            400,
           );
         }
 
