@@ -5,7 +5,10 @@ async function getKnownPrNumber(): Promise<number | null> {
     owner: OWNER,
     repo: REPO,
   });
-  if (!Array.isArray(result.pull_requests) || result.pull_requests.length === 0) {
+  if (
+    !Array.isArray(result.pull_requests) ||
+    result.pull_requests.length === 0
+  ) {
     return null;
   }
   return result.pull_requests[0].number;

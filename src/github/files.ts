@@ -126,10 +126,7 @@ export async function getFileContents(
   const byteLength = Buffer.byteLength(content, "utf8");
 
   if (byteLength > CONTENT_BYTE_BUDGET) {
-    const truncatedContent = content.slice(
-      0,
-      Math.floor(CONTENT_BYTE_BUDGET),
-    );
+    const truncatedContent = content.slice(0, Math.floor(CONTENT_BYTE_BUDGET));
 
     return {
       name: file.name,

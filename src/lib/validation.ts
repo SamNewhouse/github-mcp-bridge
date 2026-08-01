@@ -228,4 +228,3 @@ export const getWorkflowRunInputSchema = repositoryInputSchema.extend({
 
 // New: get_repository
 export const getRepositoryInputSchema = repositoryInputSchema;
-

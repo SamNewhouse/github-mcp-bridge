@@ -27,10 +27,7 @@ function getEnv(): Env {
   return cachedEnv;
 }
 
-function getOptionalPositiveIntEnv(
-  key: string,
-  fallback: number,
-): number {
+function getOptionalPositiveIntEnv(key: string, fallback: number): number {
   const raw = process.env[key];
 
   if (raw === undefined || raw.trim() === "") {
@@ -61,8 +58,7 @@ export function validateGithubPats(): void {
     if (key.startsWith("GITHUB_PAT_") && (!val || val.trim().length === 0)) {
       logWarn("github_pat_empty", {
         key,
-        message:
-          `${key} is set but empty — requests for this owner will fall back to GITHUB_PAT`,
+        message: `${key} is set but empty — requests for this owner will fall back to GITHUB_PAT`,
       });
     }
   }
@@ -93,13 +89,6 @@ export function getConnectorSecrets(): string[] {
 
 export function getPort(): number {
   return getEnv().PORT;
-}
-
-export function getMcpSessionIdleTtlMs(): number {
-  return getOptionalPositiveIntEnv(
-    "MCP_SESSION_IDLE_TTL_MS",
-    2 * 60 * 60 * 1000,
-  );
 }
 
 export function getMcpSessionMaxTtlMs(): number {

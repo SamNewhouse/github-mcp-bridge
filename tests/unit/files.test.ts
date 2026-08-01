@@ -621,7 +621,8 @@ describe("batchUpsertFiles", () => {
 
     await batchUpsertFiles("owner", "repo", input);
 
-    const firstUrl = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
+    const firstUrl = (mockGithubRequest as jest.Mock).mock
+      .calls[0][0] as string;
     expect(firstUrl).toContain("/git/refs/heads/main");
   });
 
@@ -647,7 +648,8 @@ describe("batchUpsertFiles", () => {
 
     await batchUpsertFiles("owner", "repo", input);
 
-    const secondUrl = (mockGithubRequest as jest.Mock).mock.calls[1][0] as string;
+    const secondUrl = (mockGithubRequest as jest.Mock).mock
+      .calls[1][0] as string;
     expect(secondUrl).toContain("/git/commits/base-commit-sha");
   });
 
@@ -783,7 +785,8 @@ describe("batchUpsertFiles", () => {
 
     await batchUpsertFiles("owner", "repo", input);
 
-    const updateUrl = (mockGithubRequest as jest.Mock).mock.calls[6][0] as string;
+    const updateUrl = (mockGithubRequest as jest.Mock).mock
+      .calls[6][0] as string;
     const [, updateOptions] = (mockGithubRequest as jest.Mock).mock.calls[6];
     const updateBody = JSON.parse(updateOptions.body);
 

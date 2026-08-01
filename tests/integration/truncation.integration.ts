@@ -16,7 +16,9 @@ describe("get_file_contents truncation", () => {
       expect(result.file).toHaveProperty("fullSizeBytes");
       expect(typeof result.file.fullSizeBytes).toBe("number");
       expect(typeof result.file.truncatedAt).toBe("number");
-      expect(result.file.content.length).toBeLessThan(result.file.fullSizeBytes);
+      expect(result.file.content.length).toBeLessThan(
+        result.file.fullSizeBytes,
+      );
     }
   });
 });

@@ -11,7 +11,9 @@ describe("defineTool", () => {
       handler: async () => ({ ok: true }),
     });
 
-    await expect(tool.run([] as unknown as Record<string, unknown>)).rejects.toThrow(/object/i);
+    await expect(
+      tool.run([] as unknown as Record<string, unknown>),
+    ).rejects.toThrow(/object/i);
   });
 
   test("returns detailed zod errors", async () => {
