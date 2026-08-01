@@ -1,6 +1,6 @@
 import { getGithubPatForOwner } from "../config";
 import { AppError } from "../lib/errors";
-import { logError, logInfo, logWarn } from "../lib/logging";
+import { logError, logWarn } from "../lib/logging";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -31,7 +31,6 @@ function mapGithubStatus(
         401,
       );
     case 403: {
-      // Rate limit exhausted vs plain forbidden
       if (body.includes("rate limit") || body.includes("API rate limit")) {
         return new AppError("GitHub rate limit exceeded — retry later", 429);
       }
@@ -49,9 +48,8 @@ function mapGithubStatus(
       );
     case 422:
       return new AppError(`GitHub validation error: ${body}`, 422);
-    case 429: {
+    case 429:
       return new AppError("GitHub rate limit exceeded — retry later", 429);
-    }
     default:
       return new AppError(
         `GitHub API error (${status}): ${body || "unknown error"}`,
@@ -85,21 +83,6 @@ export async function githubRequest<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  logInfo("github_request_started", {
-    method,
-    path,
-    hasBody: Boolean(init.body),
-    responseType,
-    patKey,
-    headers: {
-      accept: headers.get("Accept"),
-      authorization: headers.get("Authorization") ? "[present]" : "[missing]",
-      userAgent: headers.get("User-Agent"),
-      githubApiVersion: headers.get("X-GitHub-Api-Version"),
-      contentType: headers.get("Content-Type"),
-    },
-  });
-
   try {
     const response = await fetch(`${GITHUB_API_BASE}${path}`, {
       ...init,
@@ -110,7 +93,6 @@ export async function githubRequest<T>(
     clearTimeout(timeoutId);
     const durationMs = Date.now() - startedAt;
 
-    // Warn if rate limit is running low
     const remaining = response.headers.get("x-ratelimit-remaining");
     const resetEpoch = response.headers.get("x-ratelimit-reset");
     if (remaining !== null && Number(remaining) < 100) {
@@ -118,6 +100,8 @@ export async function githubRequest<T>(
         ? new Date(Number(resetEpoch) * 1000).toISOString()
         : null;
       logWarn("github_rate_limit_low", {
+        method,
+        path,
         remaining: Number(remaining),
         resetAt,
       });
@@ -139,7 +123,6 @@ export async function githubRequest<T>(
       throw mapGithubStatus(response.status, text, patKey);
     }
 
-    // Guard response size before reading into memory
     const contentLength = response.headers.get("content-length");
     if (contentLength && Number(contentLength) > MAX_RESPONSE_SIZE_BYTES) {
       logError("github_response_too_large", {
@@ -151,13 +134,6 @@ export async function githubRequest<T>(
       throw new AppError("GitHub response too large", 413);
     }
 
-    logInfo("github_request_succeeded", {
-      method,
-      path,
-      status: response.status,
-      durationMs,
-    });
-
     if (responseType === "text") {
       return (await response.text()) as T;
     }
@@ -168,11 +144,19 @@ export async function githubRequest<T>(
     const durationMs = Date.now() - startedAt;
 
     if (error instanceof Error && error.name === "AbortError") {
-      logError("github_request_timeout", { method, path, durationMs });
+      logError("github_request_timeout", {
+        method,
+        path,
+        durationMs,
+      });
       throw new AppError(
         `GitHub API request timed out after ${REQUEST_TIMEOUT_MS}ms`,
         504,
       );
+    }
+
+    if (error instanceof AppError) {
+      throw error;
     }
 
     logError("github_request_exception", {
