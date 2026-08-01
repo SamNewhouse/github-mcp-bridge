@@ -47,7 +47,6 @@ function isMcpToolResult(value: unknown): value is McpToolResult {
   }
 
   const candidate = value as Record<string, unknown>;
-
   if (!Array.isArray(candidate.content)) {
     return false;
   }
@@ -96,6 +95,26 @@ function resolveProtocolVersion(_: unknown): string {
   return SUPPORTED_PROTOCOL_VERSION;
 }
 
+function resolveSession(principal: string, headers: http.IncomingHttpHeaders) {
+  const requestedSessionId = getSessionIdFromHeaders(headers);
+  const hasValidRequestedSession =
+    requestedSessionId !== null &&
+    validateSession(requestedSessionId, principal);
+
+  const sessionId = hasValidRequestedSession
+    ? requestedSessionId
+    : getOrCreateSessionForPrincipal(principal);
+
+  touchSession(sessionId);
+
+  return {
+    sessionId,
+    requestedSessionId,
+    hasValidRequestedSession,
+    autoResumed: !hasValidRequestedSession,
+  };
+}
+
 export async function handleMcpRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -140,6 +159,13 @@ export async function handleMcpRequest(
       if (acceptsHtml) {
         return sendSplashPage(res);
       }
+
+      log.warn("request_rejected", {
+        path: url.pathname,
+        method: req.method ?? null,
+        reason: "method_not_allowed",
+      });
+      return sendJson(res, 405, { error: "Method not allowed" });
     }
 
     if (url.pathname !== "/") {
@@ -176,20 +202,6 @@ export async function handleMcpRequest(
       return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Unauthorized");
     }
 
-    if (req.method === "GET") {
-      const sessionId = getOrCreateSessionForPrincipal(principal);
-
-      return sendJson(res, 200, {
-        name: "github-mcp-bridge",
-        version: "0.1.0",
-        tools: getToolList(),
-        session: {
-          active: true,
-          sessionId,
-        },
-      });
-    }
-
     if (req.method !== "POST") {
       log.warn("request_rejected", {
         path: url.pathname,
@@ -212,24 +224,18 @@ export async function handleMcpRequest(
     }
 
     const body = parsed.data;
-    const requestedSessionId = getSessionIdFromHeaders(req.headers);
-    const hasValidRequestedSession =
-      requestedSessionId !== null &&
-      validateSession(requestedSessionId, principal);
+    const session = resolveSession(principal, req.headers);
 
     if (body.method === "initialize") {
-      const sessionId = hasValidRequestedSession
-        ? requestedSessionId
-        : getOrCreateSessionForPrincipal(principal);
       const protocolVersion = resolveProtocolVersion(body.params);
-
-      touchSession(sessionId);
 
       log.info("mcp_session_initialized", {
         id: body.id ?? null,
-        sessionId,
+        sessionId: session.sessionId,
         protocolVersion,
-        resumed: hasValidRequestedSession,
+        resumed: !session.autoResumed,
+        requestedSessionId: session.requestedSessionId,
+        autoResumed: session.autoResumed,
       });
 
       return sendJsonRpcResultWithSession(
@@ -240,40 +246,44 @@ export async function handleMcpRequest(
           capabilities: { tools: {} },
           serverInfo: { name: "github-mcp-bridge", version: "0.1.0" },
         },
-        sessionId,
+        session.sessionId,
       );
     }
 
-    const sessionId = hasValidRequestedSession
-      ? requestedSessionId
-      : getOrCreateSessionForPrincipal(principal);
-
-    touchSession(sessionId);
-
     if (body.method === "ping") {
-      return sendJsonRpcResultWithSession(res, body.id ?? null, {}, sessionId);
+      return sendJsonRpcResultWithSession(
+        res,
+        body.id ?? null,
+        {},
+        session.sessionId,
+      );
     }
 
     if (body.method === "notifications/initialized") {
       res.statusCode = 202;
-      res.setHeader("mcp-session-id", sessionId);
+      res.setHeader("mcp-session-id", session.sessionId);
       res.end();
       return;
     }
 
     if (body.method === "tools/list") {
+      const tools = getToolList();
+
       log.info("tools_list_requested", {
         id: body.id ?? null,
-        sessionId,
-        requestedSessionId,
-        clientSuppliedValidSession: hasValidRequestedSession,
-        autoResumed: !hasValidRequestedSession,
+        sessionId: session.sessionId,
+        requestedSessionId: session.requestedSessionId,
+        clientSuppliedValidSession: session.hasValidRequestedSession,
+        autoResumed: session.autoResumed,
+        toolCount: tools.length,
+        toolNames: tools.map((tool) => tool.name),
       });
+
       return sendJsonRpcResultWithSession(
         res,
         body.id ?? null,
-        { tools: getToolList() },
-        sessionId,
+        { tools },
+        session.sessionId,
       );
     }
 
@@ -285,16 +295,14 @@ export async function handleMcpRequest(
           id: body.id ?? null,
           method: body.method,
           issues: params.error.issues,
-          sessionId,
+          sessionId: session.sessionId,
         });
         return sendJsonRpcError(
           res,
           body.id ?? null,
           -32602,
           "Invalid params",
-          {
-            issues: params.error.issues,
-          },
+          { issues: params.error.issues },
         );
       }
 
@@ -304,11 +312,12 @@ export async function handleMcpRequest(
       try {
         const result = await executeTool(toolName, toolArgs);
         const mcpResult = toMcpToolResult(result);
+
         return sendJsonRpcResultWithSession(
           res,
           body.id ?? null,
           mcpResult,
-          sessionId,
+          session.sessionId,
         );
       } catch (error) {
         const status = getErrorStatus(error);
@@ -319,7 +328,7 @@ export async function handleMcpRequest(
           tool: toolName,
           status,
           message,
-          sessionId,
+          sessionId: session.sessionId,
           errorName: error instanceof Error ? error.name : "UnknownError",
         });
 
@@ -329,10 +338,7 @@ export async function handleMcpRequest(
             body.id ?? null,
             -32602,
             "Invalid params",
-            {
-              tool: toolName,
-              message,
-            },
+            { tool: toolName, message },
           );
         }
 
@@ -342,10 +348,7 @@ export async function handleMcpRequest(
             body.id ?? null,
             RPC_UNAUTHORIZED,
             "Unauthorized",
-            {
-              tool: toolName,
-              message,
-            },
+            { tool: toolName, message },
           );
         }
 
@@ -354,10 +357,7 @@ export async function handleMcpRequest(
           body.id ?? null,
           -32603,
           "Internal error",
-          {
-            tool: toolName,
-            message,
-          },
+          { tool: toolName, message },
         );
       }
     }
@@ -365,7 +365,7 @@ export async function handleMcpRequest(
     log.warn("jsonrpc_method_not_found", {
       id: body.id ?? null,
       method: body.method,
-      sessionId,
+      sessionId: session.sessionId,
     });
     return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
   } catch (error) {

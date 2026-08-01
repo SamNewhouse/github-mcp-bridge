@@ -18,12 +18,33 @@ export function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
 
   const chunks: Buffer[] = [];
   let totalBytes = 0;
+  let settled = false;
+
+  const safeResolve = (value: unknown) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    resolve(value);
+  };
+
+  const safeReject = (error: unknown) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    reject(error);
+  };
 
   req.on("data", (chunk: Buffer) => {
+    if (settled) {
+      return;
+    }
+
     totalBytes += chunk.length;
 
     if (totalBytes > MAX_BODY_SIZE_BYTES) {
-      reject(new AppError("Request body too large", 413));
+      safeReject(new AppError("Request body too large", 413));
       req.destroy();
       return;
     }
@@ -32,21 +53,25 @@ export function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   });
 
   req.on("end", () => {
+    if (settled) {
+      return;
+    }
+
     try {
       const raw = Buffer.concat(chunks).toString("utf8").trim();
 
       if (!raw) {
-        resolve({});
+        safeResolve({});
         return;
       }
 
-      resolve(JSON.parse(raw) as unknown);
+      safeResolve(JSON.parse(raw) as unknown);
     } catch {
-      reject(new AppError("Invalid JSON body", 400));
+      safeReject(new AppError("Invalid JSON body", 400));
     }
   });
 
-  req.on("error", reject);
+  req.on("error", safeReject);
 
   return promise;
 }
@@ -89,8 +114,9 @@ export function sendJsonRpcError(
   code: number,
   message: string,
   data?: unknown,
+  httpStatus = 200,
 ): void {
-  sendJson(res, 200, {
+  sendJson(res, httpStatus, {
     jsonrpc: "2.0",
     id: id ?? null,
     error: {
