@@ -25,6 +25,7 @@ export function sanitizeHeaders(
   return {
     authorization: headers.authorization ? "[present]" : "[missing]",
     "x-api-key": headers["x-api-key"] ? "[present]" : "[missing]",
+    "mcp-session-id": headers["mcp-session-id"] ? "[present]" : "[missing]",
     accept: headers.accept ?? null,
     contentType: headers["content-type"] ?? null,
     userAgent: headers["user-agent"] ?? null,

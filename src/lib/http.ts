@@ -73,6 +73,16 @@ export function sendJsonRpcResult(
   });
 }
 
+export function sendJsonRpcResultWithSession(
+  res: http.ServerResponse,
+  id: JsonRpcId,
+  result: unknown,
+  sessionId: string,
+): void {
+  res.setHeader("mcp-session-id", sessionId);
+  sendJsonRpcResult(res, id, result);
+}
+
 export function sendJsonRpcError(
   res: http.ServerResponse,
   id: JsonRpcId,
