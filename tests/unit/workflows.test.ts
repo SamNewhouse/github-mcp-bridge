@@ -3,10 +3,7 @@ jest.mock("../../src/github/client", () => ({
 }));
 
 import { githubRequest } from "../../src/github/client";
-import {
-  getWorkflowRun,
-  listWorkflowRuns,
-} from "../../src/github/workflows";
+import { getWorkflowRun, listWorkflowRuns } from "../../src/github/workflows";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
 
@@ -169,32 +166,30 @@ describe("getWorkflowRun", () => {
    * from the second API call to the workflow jobs endpoint.
    */
   it("returns run detail plus jobs and steps", async () => {
-    mock
-      .mockResolvedValueOnce(makeRun())
-      .mockResolvedValueOnce({
-        total_count: 1,
-        jobs: [
-          {
-            id: 1,
-            name: "test",
-            status: "completed",
-            conclusion: "success",
-            started_at: "2026-01-01T00:01:00Z",
-            completed_at: "2026-01-01T00:02:00Z",
-            html_url: "https://github.com/job/1",
-            steps: [
-              {
-                number: 1,
-                name: "checkout",
-                status: "completed",
-                conclusion: "success",
-                started_at: "2026-01-01T00:01:00Z",
-                completed_at: "2026-01-01T00:01:10Z",
-              },
-            ],
-          },
-        ],
-      });
+    mock.mockResolvedValueOnce(makeRun()).mockResolvedValueOnce({
+      total_count: 1,
+      jobs: [
+        {
+          id: 1,
+          name: "test",
+          status: "completed",
+          conclusion: "success",
+          started_at: "2026-01-01T00:01:00Z",
+          completed_at: "2026-01-01T00:02:00Z",
+          html_url: "https://github.com/job/1",
+          steps: [
+            {
+              number: 1,
+              name: "checkout",
+              status: "completed",
+              conclusion: "success",
+              started_at: "2026-01-01T00:01:00Z",
+              completed_at: "2026-01-01T00:01:10Z",
+            },
+          ],
+        },
+      ],
+    });
 
     const result = await getWorkflowRun("owner", "repo", 123);
 
@@ -261,12 +256,10 @@ describe("getWorkflowRun", () => {
    * for the run and requests up to 100 jobs.
    */
   it("requests jobs with per_page=100", async () => {
-    mock
-      .mockResolvedValueOnce(makeRun())
-      .mockResolvedValueOnce({
-        total_count: 0,
-        jobs: [],
-      });
+    mock.mockResolvedValueOnce(makeRun()).mockResolvedValueOnce({
+      total_count: 0,
+      jobs: [],
+    });
 
     await getWorkflowRun("owner", "repo", 123);
 
@@ -280,12 +273,10 @@ describe("getWorkflowRun", () => {
    * Asserts jobs is returned as an empty array.
    */
   it("returns an empty jobs array when no jobs are present", async () => {
-    mock
-      .mockResolvedValueOnce(makeRun())
-      .mockResolvedValueOnce({
-        total_count: 0,
-        jobs: [],
-      });
+    mock.mockResolvedValueOnce(makeRun()).mockResolvedValueOnce({
+      total_count: 0,
+      jobs: [],
+    });
 
     const result = await getWorkflowRun("owner", "repo", 123);
 
@@ -297,32 +288,30 @@ describe("getWorkflowRun", () => {
    * Asserts null values are preserved in the mapped output.
    */
   it("preserves null step timestamps", async () => {
-    mock
-      .mockResolvedValueOnce(makeRun())
-      .mockResolvedValueOnce({
-        total_count: 1,
-        jobs: [
-          {
-            id: 1,
-            name: "test",
-            status: "in_progress",
-            conclusion: null,
-            started_at: "2026-01-01T00:01:00Z",
-            completed_at: null,
-            html_url: "https://github.com/job/1",
-            steps: [
-              {
-                number: 1,
-                name: "checkout",
-                status: "in_progress",
-                conclusion: null,
-                started_at: null,
-                completed_at: null,
-              },
-            ],
-          },
-        ],
-      });
+    mock.mockResolvedValueOnce(makeRun()).mockResolvedValueOnce({
+      total_count: 1,
+      jobs: [
+        {
+          id: 1,
+          name: "test",
+          status: "in_progress",
+          conclusion: null,
+          started_at: "2026-01-01T00:01:00Z",
+          completed_at: null,
+          html_url: "https://github.com/job/1",
+          steps: [
+            {
+              number: 1,
+              name: "checkout",
+              status: "in_progress",
+              conclusion: null,
+              started_at: null,
+              completed_at: null,
+            },
+          ],
+        },
+      ],
+    });
 
     const result = await getWorkflowRun("owner", "repo", 123);
 

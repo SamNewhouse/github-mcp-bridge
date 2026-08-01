@@ -1,15 +1,11 @@
 import * as crypto from "node:crypto";
 import type * as http from "node:http";
-import {
-  getMcpSessionIdleTtlMs,
-  getMcpSessionMaxTtlMs,
-} from "../config";
+import { getMcpSessionMaxTtlMs } from "../config";
 
 type SessionRecord = {
   principal: string;
   createdAt: number;
   lastSeenAt: number;
-  expiresAt: number;
 };
 
 const sessions = new Map<string, SessionRecord>();
@@ -21,10 +17,7 @@ function now(): number {
 
 function isExpired(session: SessionRecord, timestamp: number): boolean {
   const maxAgeMs = getMcpSessionMaxTtlMs();
-  return (
-    session.expiresAt <= timestamp ||
-    session.createdAt + maxAgeMs <= timestamp
-  );
+  return session.createdAt + maxAgeMs <= timestamp;
 }
 
 function deleteSession(sessionId: string): void {
@@ -71,7 +64,6 @@ export function createSession(principal: string): string {
     principal,
     createdAt: timestamp,
     lastSeenAt: timestamp,
-    expiresAt: timestamp + getMcpSessionIdleTtlMs(),
   });
   principalToSessionId.set(principal, sessionId);
 
@@ -96,7 +88,10 @@ export function getOrCreateSessionForPrincipal(principal: string): string {
   return existingSessionId;
 }
 
-export function validateSession(sessionId: string, principal?: string): boolean {
+export function validateSession(
+  sessionId: string,
+  principal?: string,
+): boolean {
   pruneExpiredSessions();
 
   const session = sessions.get(sessionId);
@@ -128,7 +123,6 @@ export function touchSession(sessionId: string): boolean {
   sessions.set(sessionId, {
     ...session,
     lastSeenAt: now(),
-    expiresAt: now() + getMcpSessionIdleTtlMs(),
   });
 
   return true;

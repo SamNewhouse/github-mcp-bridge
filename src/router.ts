@@ -17,7 +17,6 @@ import {
 } from "./lib/http";
 import { createRequestLogger } from "./lib/logging";
 import {
-  createSession,
   getOrCreateSessionForPrincipal,
   getSessionIdFromHeaders,
   touchSession,
@@ -213,15 +212,24 @@ export async function handleMcpRequest(
     }
 
     const body = parsed.data;
+    const requestedSessionId = getSessionIdFromHeaders(req.headers);
+    const hasValidRequestedSession =
+      requestedSessionId !== null &&
+      validateSession(requestedSessionId, principal);
 
     if (body.method === "initialize") {
-      const sessionId = createSession(principal);
+      const sessionId = hasValidRequestedSession
+        ? requestedSessionId
+        : getOrCreateSessionForPrincipal(principal);
       const protocolVersion = resolveProtocolVersion(body.params);
+
+      touchSession(sessionId);
 
       log.info("mcp_session_initialized", {
         id: body.id ?? null,
         sessionId,
         protocolVersion,
+        resumed: hasValidRequestedSession,
       });
 
       return sendJsonRpcResultWithSession(
@@ -236,11 +244,9 @@ export async function handleMcpRequest(
       );
     }
 
-    const requestedSessionId = getSessionIdFromHeaders(req.headers);
-    const sessionId =
-      requestedSessionId && validateSession(requestedSessionId, principal)
-        ? requestedSessionId
-        : getOrCreateSessionForPrincipal(principal);
+    const sessionId = hasValidRequestedSession
+      ? requestedSessionId
+      : getOrCreateSessionForPrincipal(principal);
 
     touchSession(sessionId);
 
@@ -259,7 +265,9 @@ export async function handleMcpRequest(
       log.info("tools_list_requested", {
         id: body.id ?? null,
         sessionId,
-        autoResumed: requestedSessionId !== sessionId,
+        requestedSessionId,
+        clientSuppliedValidSession: hasValidRequestedSession,
+        autoResumed: !hasValidRequestedSession,
       });
       return sendJsonRpcResultWithSession(
         res,

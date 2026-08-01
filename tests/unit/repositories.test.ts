@@ -3,10 +3,7 @@ jest.mock("../../src/github/client", () => ({
 }));
 
 import { githubRequest } from "../../src/github/client";
-import {
-  getRepository,
-  listRepositories,
-} from "../../src/github/repositories";
+import { getRepository, listRepositories } from "../../src/github/repositories";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
 
