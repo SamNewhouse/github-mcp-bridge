@@ -13,6 +13,7 @@
     "posttest": "rm -rf dist/tests",
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration",
+    "test:e2e": "node --import tsx --test tests/e2e/mcp-stability.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
