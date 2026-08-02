@@ -56,7 +56,23 @@ export function defineTool<TSchema extends z.ZodTypeAny>(config: {
         );
       }
 
-      return config.handler(parsed.data);
+      try {
+        return await config.handler(parsed.data);
+      } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
+
+        if (error instanceof Error) {
+          throw new AppError(error.message, 500, {
+            cause: error,
+          });
+        }
+
+        throw new AppError(`Tool "${config.name}" failed.`, 500, {
+          cause: error,
+        });
+      }
     },
   };
 }
