@@ -1,12 +1,16 @@
 import { getGithubPatForOwner } from "../config";
 import { AppError } from "../lib/errors";
-import { logError, logWarn, logInfo } from "../lib/logging";
-import { getFromCache, setInCache, invalidateCacheForPath } from "./cache";
+import { logError, logInfo, logWarn } from "../lib/logging";
+import {
+  getFromCache,
+  invalidateCacheForPath,
+  setInCache,
+} from "./cache";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const REQUEST_TIMEOUT_MS = 10_000;
-const MAX_RESPONSE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_RESPONSE_SIZE_BYTES = 5 * 1024 * 1024;
 
 type GithubRequestOptions = RequestInit & {
   responseType?: "json" | "text";
@@ -14,12 +18,6 @@ type GithubRequestOptions = RequestInit & {
   owner?: string;
 };
 
-/**
- * Maps a GitHub HTTP error status to an AppError.
- * patKey is the env var name that was used (e.g. "GITHUB_PAT_DR_DOG_GAMES"
- * or "GITHUB_PAT") so that 401 errors tell the operator exactly which
- * credential to check rather than the generic "check your PAT".
- */
 function mapGithubStatus(
   status: number,
   body: string,
@@ -31,32 +29,45 @@ function mapGithubStatus(
         `GitHub authentication failed — check ${patKey}`,
         401,
       );
-    case 403: {
+
+    case 403:
       if (body.includes("rate limit") || body.includes("API rate limit")) {
         return new AppError("GitHub rate limit exceeded — retry later", 429);
       }
+
       return new AppError(
         "GitHub request forbidden — insufficient PAT scopes",
         403,
       );
-    }
+
     case 404:
       return new AppError("GitHub resource not found", 404);
+
     case 409:
       return new AppError(
         "GitHub conflict — resource already exists or is out of date",
         409,
       );
+
     case 422:
       return new AppError(`GitHub validation error: ${body}`, 422);
+
     case 429:
       return new AppError("GitHub rate limit exceeded — retry later", 429);
+
     default:
       return new AppError(
         `GitHub API error (${status}): ${body || "unknown error"}`,
         status,
       );
   }
+}
+
+function getCacheRepresentation(
+  headers: Headers,
+  responseType: "json" | "text",
+): string {
+  return `${responseType}:${headers.get("Accept") ?? "default"}`;
 }
 
 export async function githubRequest<T>(
@@ -70,24 +81,42 @@ export async function githubRequest<T>(
   const owner = init.owner ?? "";
   const { pat, key: patKey } = getGithubPatForOwner(owner);
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    REQUEST_TIMEOUT_MS,
+  );
 
-  // Check cache for GET requests
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/vnd.github+json");
+  }
+
+  const representation = getCacheRepresentation(headers, responseType);
+
   if (method === "GET") {
     const bodyForCache = init.body
       ? JSON.parse(init.body as string)
       : undefined;
-    const cached = getFromCache(method, path, bodyForCache);
+
+    const cached = getFromCache<T>(
+      method,
+      path,
+      bodyForCache,
+      representation,
+    );
+
     if (cached !== null) {
       const durationMs = Date.now() - startedAt;
-      logInfo("github_cache_hit", { method, path, durationMs });
-      clearTimeout(timeoutId);
-      return cached as T;
-    }
-  }
 
-  if (!headers.has("Accept")) {
-    headers.set("Accept", "application/vnd.github+json");
+      logInfo("github_cache_hit", {
+        method,
+        path,
+        representation,
+        durationMs,
+      });
+
+      clearTimeout(timeoutId);
+      return cached;
+    }
   }
 
   headers.set("Authorization", `Bearer ${pat}`);
@@ -106,14 +135,16 @@ export async function githubRequest<T>(
     });
 
     clearTimeout(timeoutId);
-    const durationMs = Date.now() - startedAt;
 
+    const durationMs = Date.now() - startedAt;
     const remaining = response.headers.get("x-ratelimit-remaining");
     const resetEpoch = response.headers.get("x-ratelimit-reset");
+
     if (remaining !== null && Number(remaining) < 100) {
       const resetAt = resetEpoch
         ? new Date(Number(resetEpoch) * 1000).toISOString()
         : null;
+
       logWarn("github_rate_limit_low", {
         method,
         path,
@@ -139,13 +170,18 @@ export async function githubRequest<T>(
     }
 
     const contentLength = response.headers.get("content-length");
-    if (contentLength && Number(contentLength) > MAX_RESPONSE_SIZE_BYTES) {
+
+    if (
+      contentLength &&
+      Number(contentLength) > MAX_RESPONSE_SIZE_BYTES
+    ) {
       logError("github_response_too_large", {
         method,
         path,
         contentLength: Number(contentLength),
         limitBytes: MAX_RESPONSE_SIZE_BYTES,
       });
+
       throw new AppError("GitHub response too large", 413);
     }
 
@@ -157,26 +193,36 @@ export async function githubRequest<T>(
       result = (await response.json()) as T;
     }
 
-    // Cache successful GET responses with TTL
     if (method === "GET") {
       const bodyForCache = init.body
         ? JSON.parse(init.body as string)
         : undefined;
+
       setInCache(method, path, bodyForCache, result, {
         etag: response.headers.get("etag") || undefined,
+        representation,
       });
-      logInfo("github_cache_set", { method, path });
+
+      logInfo("github_cache_set", {
+        method,
+        path,
+        representation,
+      });
     }
 
-    // Invalidate cache on mutations
     if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
       invalidateCacheForPath(path);
-      logInfo("github_cache_invalidated", { method, path });
+
+      logInfo("github_cache_invalidated", {
+        method,
+        path,
+      });
     }
 
     return result;
   } catch (error) {
     clearTimeout(timeoutId);
+
     const durationMs = Date.now() - startedAt;
 
     if (error instanceof Error && error.name === "AbortError") {
@@ -185,6 +231,7 @@ export async function githubRequest<T>(
         path,
         durationMs,
       });
+
       throw new AppError(
         `GitHub API request timed out after ${REQUEST_TIMEOUT_MS}ms`,
         504,

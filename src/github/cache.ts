@@ -1,14 +1,15 @@
 type CacheEntry<T> = {
   value: T;
-  expiresAt: number; // ms timestamp
+  expiresAt: number;
   etag?: string;
-  size: number; // estimated memory size in bytes
+  size: number;
 };
 
 const cache = new Map<string, CacheEntry<unknown>>();
-const DEFAULT_TTL_MS = 90_000; // 90 seconds
+
+const DEFAULT_TTL_MS = 90_000;
 const MAX_CACHE_ENTRIES = 500;
-const MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024;
 
 interface CacheConfig {
   patterns: RegExp[];
@@ -54,9 +55,9 @@ const CACHE_CONFIGS: CacheConfig[] = [
 
 function estimateSize(value: unknown): number {
   try {
-    return JSON.stringify(value).length * 2; // Rough estimate: 2 bytes per char
+    return JSON.stringify(value).length * 2;
   } catch {
-    return 1024; // Default to 1KB if can't serialize
+    return 1024;
   }
 }
 
@@ -64,35 +65,44 @@ function cacheKey(
   method: string,
   path: string,
   body?: unknown,
-  representation?: string,
+  representation = "default",
 ): string {
   return JSON.stringify([
     method,
     path,
     body ?? null,
-    representation ?? "default",
+    representation,
   ]);
 }
 
 function evictOldest(): void {
-  if (cache.size === 0) return;
+  if (cache.size === 0) {
+    return;
+  }
+
   const oldestKey = cache.keys().next().value;
+
   if (oldestKey) {
-    const entry = cache.get(oldestKey);
-    if (entry) {
-      cache.delete(oldestKey);
-    }
+    cache.delete(oldestKey);
   }
 }
 
-function evictUntilUnderLimit(): void {
-  while (cache.size > 0) {
-    let totalSize = 0;
-    for (const entry of cache.values()) {
-      totalSize += entry.size;
-    }
+function getTotalCacheSize(): number {
+  let totalSize = 0;
 
-    if (totalSize <= MAX_CACHE_SIZE_BYTES && cache.size <= MAX_CACHE_ENTRIES) {
+  for (const entry of cache.values()) {
+    totalSize += entry.size;
+  }
+
+  return totalSize;
+}
+
+function evictUntilUnderLimit(): void {
+  while (
+    cache.size > MAX_CACHE_ENTRIES ||
+    getTotalCacheSize() > MAX_CACHE_SIZE_BYTES
+  ) {
+    if (cache.size === 0) {
       break;
     }
 
@@ -116,14 +126,20 @@ export function getFromCache<T>(
   method: string,
   path: string,
   body?: unknown,
+  representation = "default",
 ): T | null {
-  const key = cacheKey(method, path, body);
+  const key = cacheKey(method, path, body, representation);
   const entry = cache.get(key);
-  if (!entry) return null;
+
+  if (!entry) {
+    return null;
+  }
+
   if (Date.now() > entry.expiresAt) {
     cache.delete(key);
     return null;
   }
+
   return entry.value as T;
 }
 
@@ -135,26 +151,17 @@ export function setInCache<T>(
   options?: {
     ttlMs?: number;
     etag?: string;
+    representation?: string;
   },
 ): void {
   const ttlMs = options?.ttlMs ?? getCacheTTL(path);
   const etag = options?.etag;
-  const key = cacheKey(method, path, body);
+  const representation = options?.representation ?? "default";
+  const key = cacheKey(method, path, body, representation);
   const size = estimateSize(value);
 
-  // Evict if at capacity
-  if (cache.size >= MAX_CACHE_ENTRIES) {
-    evictOldest();
-  }
-
-  // Check if adding this would exceed size limit
-  let totalSize = 0;
-  for (const entry of cache.values()) {
-    totalSize += entry.size;
-  }
-
-  if (totalSize + size > MAX_CACHE_SIZE_BYTES) {
-    evictUntilUnderLimit();
+  if (cache.has(key)) {
+    cache.delete(key);
   }
 
   cache.set(key, {
@@ -163,23 +170,31 @@ export function setInCache<T>(
     etag,
     size,
   });
+
+  evictUntilUnderLimit();
 }
 
 export function invalidateCacheForPath(pathPattern: string): void {
   const keysToDelete: string[] = [];
+  const pathPrefix = pathPattern.split("/").slice(0, 3).join("/");
 
   for (const key of cache.keys()) {
     try {
-      const [method, path] = JSON.parse(key as string) as [string, string];
-      if (
-        path.startsWith(pathPattern) ||
-        pathPattern.split("/").slice(0, 3).join("/") ===
-          path.split("/").slice(0, 3).join("/")
-      ) {
+      const [, path] = JSON.parse(key) as [
+        string,
+        string,
+        unknown,
+        string?,
+      ];
+
+      const sameRepository =
+        pathPrefix === path.split("/").slice(0, 3).join("/");
+
+      if (path.startsWith(pathPattern) || sameRepository) {
         keysToDelete.push(key);
       }
     } catch {
-      // Skip malformed keys
+      // Ignore malformed cache keys.
     }
   }
 
@@ -205,7 +220,7 @@ export function getCacheStats(): {
   }
 
   return {
-    size: cache.size,
+    size: getTotalCacheSize(),
     entries: validKeys.length,
     keys: validKeys,
   };
