@@ -33,7 +33,9 @@ async function postJsonRpc(
 }
 
 export async function initializeSession() {
-  if (sessionId) return sessionId;
+  if (sessionId) {
+    return sessionId;
+  }
 
   const initRes = await postJsonRpc({
     jsonrpc: "2.0",
@@ -89,8 +91,11 @@ export async function postAutoSessionJsonRpc(body: JsonRpcBody) {
   return postJsonRpc(body);
 }
 
-export async function callTool(name: string, input: Record<string, unknown>) {
-  const res = await postAutoSessionJsonRpc({
+export async function callTool(
+  name: string,
+  input: Record<string, unknown>,
+) {
+  const res = await postSessionJsonRpc({
     jsonrpc: "2.0",
     id: jsonRpcId(),
     method: "tools/call",
@@ -98,7 +103,11 @@ export async function callTool(name: string, input: Record<string, unknown>) {
   });
 
   const json = await res.json();
-  if (json.error) throw new Error(`Tool error: ${JSON.stringify(json.error)}`);
+
+  if (json.error) {
+    throw new Error(`Tool error: ${JSON.stringify(json.error)}`);
+  }
+
   return JSON.parse(json.result.content[0].text);
 }
 
@@ -106,7 +115,7 @@ export async function callToolRaw(
   name: string,
   input: Record<string, unknown>,
 ) {
-  const res = await postAutoSessionJsonRpc({
+  const res = await postSessionJsonRpc({
     jsonrpc: "2.0",
     id: jsonRpcId(),
     method: "tools/call",

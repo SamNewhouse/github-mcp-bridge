@@ -3,7 +3,6 @@ import {
   callTool,
   initializeSession,
   OWNER,
-  postAutoSessionJsonRpc,
   postSessionJsonRpc,
   REPO,
   resetSession,
@@ -15,7 +14,7 @@ describe("smoke", () => {
   });
 
   test("tools/list succeeds without explicit initialize", async () => {
-    const res = await postAutoSessionJsonRpc({
+    const res = await postSessionJsonRpc({
       jsonrpc: "2.0",
       id: 1,
       method: "tools/list",
