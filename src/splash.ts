@@ -1,5 +1,3 @@
-const packageJson = require('../package.json');
-
 function splashHead(): string {
   return `
   <head>
@@ -88,7 +86,6 @@ function splashStatus(): string {
 }
 
 function splashMeta(toolCount: number): string {
-  const nodeVersion = process.version.replace('v', '');
   return `
   <style>
     .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -103,8 +100,8 @@ function splashMeta(toolCount: number): string {
       <div class="meta-value accent">${toolCount}</div>
     </div>
     <div class="meta-item">
-      <div class="meta-label">Version</div>
-      <div class="meta-value">${packageJson.version}</div>
+      <div class="meta-label">Protocol</div>
+      <div class="meta-value">MCP 2025</div>
     </div>
     <div class="meta-item">
       <div class="meta-label">Transport</div>
@@ -112,7 +109,7 @@ function splashMeta(toolCount: number): string {
     </div>
     <div class="meta-item">
       <div class="meta-label">Runtime</div>
-      <div class="meta-value">Node ${nodeVersion}</div>
+      <div class="meta-value">Node 24</div>
     </div>
   </div>`;
 }
