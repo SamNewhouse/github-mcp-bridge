@@ -1,6 +1,3 @@
-// Splash page components
-// Each function returns an HTML string fragment. Compose them in getSplashHtml.
-
 function splashHead(): string {
   return `
   <head>
