@@ -20,38 +20,70 @@ const TEST_PRINCIPAL = "test-principal";
 const ALT_TEST_PRINCIPAL = "test-principal-alt";
 const TEST_TOOL_NAME = process.env.MCP_TEST_TOOL_NAME || "";
 const TEST_TOOL_ARGS = TEST_TOOL_NAME
-  ? (JSON.parse(process.env.MCP_TEST_TOOL_ARGS || "{}") as Record<string, unknown>)
+  ? (JSON.parse(process.env.MCP_TEST_TOOL_ARGS || "{}") as Record<
+      string,
+      unknown
+    >)
   : {};
 
+/**
+ * Logs a passing test step and optional key-value details.
+ *
+ * @param step - The name of the completed test step.
+ * @param details - Optional diagnostic details.
+ */
 function logPass(step: string, details: Record<string, unknown> = {}): void {
   const compact = Object.entries(details)
-    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .filter(
+      ([, value]) => value !== undefined && value !== null && value !== "",
+    )
     .map(([key, value]) => `${key}=${String(value)}`)
     .join(" ");
 
   console.log(`PASS ${step}${compact ? ` ${compact}` : ""}`);
 }
 
+/**
+ * Returns the registered tool names in deterministic order.
+ *
+ * @returns Sorted registered tool names.
+ */
 function getSortedToolNames(): string[] {
   return getToolList()
     .map((tool) => tool.name)
     .sort();
 }
 
+/**
+ * Selects the configured test tool or the first registered tool.
+ *
+ * @returns The tool name to execute.
+ * @throws When no tools are registered.
+ */
 function getChosenToolName(): string {
   const tools = getToolList();
+
   assert.ok(tools.length > 0, "expected discovered tools");
+
   const chosenToolName = TEST_TOOL_NAME || tools[0]?.name;
+
   assert.ok(chosenToolName, "expected a tool to call");
+
   return chosenToolName;
 }
 
+/**
+ * Returns arguments for the selected test tool.
+ *
+ * @returns Environment-provided arguments, or an empty object by default.
+ */
 function getChosenToolArgs(): Record<string, unknown> {
   return TEST_TOOL_NAME ? TEST_TOOL_ARGS : {};
 }
 
 test("tool registry is populated and internally consistent", () => {
   const tools = getToolList();
+
   assert.ok(tools.length > 0, "expected at least one registered tool");
 
   const toolNamesFromList = tools.map((tool) => tool.name).sort();
@@ -67,12 +99,18 @@ test("tool registry is populated and internally consistent", () => {
     assert.equal(typeof tool.name, "string");
     assert.ok(tool.name.length > 0, "tool name should be non-empty");
     assert.equal(typeof tool.description, "string");
+
     assert.ok(
       tool.description.length > 0,
       `tool ${tool.name} should have a description`,
     );
+
     assert.equal(typeof tool.inputSchema, "object");
-    assert.ok(tool.inputSchema, `tool ${tool.name} should have an input schema`);
+
+    assert.ok(
+      tool.inputSchema,
+      `tool ${tool.name} should have an input schema`,
+    );
   }
 
   logPass("tool_registry_consistent", { toolCount: tools.length });
@@ -83,7 +121,11 @@ test("tool list stays stable across repeated cycles", () => {
 
   for (let i = 0; i < REPEAT_COUNT; i++) {
     const toolNames = getSortedToolNames();
-    assert.ok(toolNames.length > 0, `cycle_${i + 1}: expected at least one tool`);
+
+    assert.ok(
+      toolNames.length > 0,
+      `cycle_${i + 1}: expected at least one tool`,
+    );
 
     toolNameSets.push(toolNames);
 
@@ -93,6 +135,7 @@ test("tool list stays stable across repeated cycles", () => {
   }
 
   const firstSignature = JSON.stringify(toolNameSets[0]);
+
   for (const toolNames of toolNameSets) {
     assert.equal(
       JSON.stringify(toolNames),
@@ -107,9 +150,11 @@ test("session is reused for the same principal across repeated cycles", () => {
 
   for (let i = 0; i < REPEAT_COUNT; i++) {
     const sessionId = getOrCreateSessionForPrincipal(TEST_PRINCIPAL);
+
     assert.ok(sessionId, `cycle_${i + 1}: expected a session id`);
 
     const isValid = validateSession(sessionId, TEST_PRINCIPAL);
+
     assert.ok(
       isValid,
       `cycle_${i + 1}: session should be valid immediately after creation`,
@@ -139,6 +184,7 @@ test("different principals receive different sessions", () => {
 
   assert.ok(sessionA, "expected session for primary principal");
   assert.ok(sessionB, "expected session for alternate principal");
+
   assert.notEqual(
     sessionA,
     sessionB,
@@ -173,6 +219,7 @@ test("tool list is stable while sessions are created and touched repeatedly", ()
     );
 
     const current = JSON.stringify(getSortedToolNames());
+
     assert.equal(
       current,
       baseline,
@@ -205,6 +252,7 @@ test("tool list is consistent when fetched without any session context", () => {
   }
 
   const firstSignature = JSON.stringify(toolSets[0]);
+
   for (const toolNames of toolSets) {
     assert.equal(
       JSON.stringify(toolNames),
@@ -219,19 +267,32 @@ test("tool call executes successfully with and without an active session", async
   const chosenToolArgs = getChosenToolArgs();
 
   const sessionId = getOrCreateSessionForPrincipal(TEST_PRINCIPAL);
-  assert.ok(validateSession(sessionId, TEST_PRINCIPAL), "session should be valid");
+
+  assert.ok(
+    validateSession(sessionId, TEST_PRINCIPAL),
+    "session should be valid",
+  );
 
   const withSession = await executeTool(chosenToolName, chosenToolArgs);
-  assert.ok(withSession !== undefined, "expected a result from tool call with session");
+
+  assert.ok(
+    withSession !== undefined,
+    "expected a result from tool call with session",
+  );
 
   logPass("tool_call_with_session", {
     tool: chosenToolName,
     sessionId,
   });
 
-  assert.equal(touchSession(sessionId), true, "expected touchSession to succeed");
+  assert.equal(
+    touchSession(sessionId),
+    true,
+    "expected touchSession to succeed",
+  );
 
   const withoutSession = await executeTool(chosenToolName, chosenToolArgs);
+
   assert.ok(
     withoutSession !== undefined,
     "expected a result from tool call without session",
@@ -249,9 +310,11 @@ test("repeated tool calls do not change tool availability", async () => {
 
   for (let i = 0; i < REPEAT_COUNT; i++) {
     const result = await executeTool(chosenToolName, chosenToolArgs);
+
     assert.ok(result !== undefined, `cycle_${i + 1}: expected tool result`);
 
     const current = JSON.stringify(getSortedToolNames());
+
     assert.equal(
       current,
       baseline,
@@ -276,12 +339,14 @@ test("mixed session and stateless flows do not affect tool availability", async 
     assert.equal(validateSession(sessionId, principal), true);
 
     const withSession = await executeTool(chosenToolName, chosenToolArgs);
+
     assert.ok(
       withSession !== undefined,
       `cycle_${i + 1}: expected session-backed tool result`,
     );
 
     const withoutSession = await executeTool(chosenToolName, chosenToolArgs);
+
     assert.ok(
       withoutSession !== undefined,
       `cycle_${i + 1}: expected stateless tool result`,
@@ -290,6 +355,7 @@ test("mixed session and stateless flows do not affect tool availability", async 
     assert.equal(touchSession(sessionId), true);
 
     const current = JSON.stringify(getSortedToolNames());
+
     assert.equal(
       current,
       baseline,
@@ -348,9 +414,11 @@ test("tool registry remains stable under repeated mixed operations", async () =>
 
     if (i % 3 === 0) {
       const result = await executeTool(chosenToolName, chosenToolArgs);
+
       assert.ok(result !== undefined, `stress_${i + 1}: expected tool result`);
     } else {
       const toolNames = getSortedToolNames();
+
       assert.ok(toolNames.length > 0, `stress_${i + 1}: expected tools`);
     }
 
