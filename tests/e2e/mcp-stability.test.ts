@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -9,9 +9,9 @@ import {
   toolDefinitions,
 } from "../../src/tools/index";
 import {
+  deleteSessionForPrincipal,
   getOrCreateSessionForPrincipal,
-  validateSession,
-  touchSession,
+  touchSessionForPrincipal,
 } from "../../src/lib/session";
 
 const REPEAT_COUNT = 5;
@@ -25,6 +25,17 @@ const TEST_TOOL_ARGS = TEST_TOOL_NAME
       unknown
     >)
   : {};
+
+/** Sessions created during this run, so they can be cleaned up afterwards. */
+const createdSessions: Array<{ sessionId: string; principal: string }> = [];
+
+after(async () => {
+  await Promise.all(
+    createdSessions.map(({ sessionId, principal }) =>
+      deleteSessionForPrincipal(sessionId, principal),
+    ),
+  );
+});
 
 /**
  * Logs a passing test step and optional key-value details.
@@ -41,6 +52,29 @@ function logPass(step: string, details: Record<string, unknown> = {}): void {
     .join(" ");
 
   console.log(`PASS ${step}${compact ? ` ${compact}` : ""}`);
+}
+
+/**
+ * Creates a session for a principal, asserts that it is immediately valid,
+ * and tracks it for cleanup.
+ *
+ * @param principal - The principal that owns the session.
+ * @returns The new session ID.
+ */
+async function openSession(principal: string): Promise<string> {
+  const sessionId = await getOrCreateSessionForPrincipal(principal);
+
+  assert.ok(sessionId, "expected a session id");
+
+  createdSessions.push({ sessionId, principal });
+
+  assert.equal(
+    await touchSessionForPrincipal(sessionId, principal),
+    true,
+    "session should be valid immediately after creation",
+  );
+
+  return sessionId;
 }
 
 /**
@@ -145,45 +179,23 @@ test("tool list stays stable across repeated cycles", () => {
   }
 });
 
-test("session is reused for the same principal across repeated cycles", () => {
-  const sessions: string[] = [];
+test("a single session stays valid across repeated touches", async () => {
+  const sessionId = await openSession(TEST_PRINCIPAL);
 
   for (let i = 0; i < REPEAT_COUNT; i++) {
-    const sessionId = getOrCreateSessionForPrincipal(TEST_PRINCIPAL);
-
-    assert.ok(sessionId, `cycle_${i + 1}: expected a session id`);
-
-    const isValid = validateSession(sessionId, TEST_PRINCIPAL);
-
-    assert.ok(
-      isValid,
-      `cycle_${i + 1}: session should be valid immediately after creation`,
-    );
-
     assert.equal(
-      touchSession(sessionId),
+      await touchSessionForPrincipal(sessionId, TEST_PRINCIPAL),
       true,
-      `cycle_${i + 1}: expected touchSession to succeed`,
+      `cycle_${i + 1}: expected the session to stay valid`,
     );
 
-    sessions.push(sessionId);
-
-    logPass(`cycle_${i + 1}_session_reuse`, { sessionId });
+    logPass(`cycle_${i + 1}_session_touch`, { sessionId });
   }
-
-  assert.equal(
-    new Set(sessions).size,
-    1,
-    "expected the same session to be reused for the same principal across cycles",
-  );
 });
 
-test("different principals receive different sessions", () => {
-  const sessionA = getOrCreateSessionForPrincipal(TEST_PRINCIPAL);
-  const sessionB = getOrCreateSessionForPrincipal(ALT_TEST_PRINCIPAL);
-
-  assert.ok(sessionA, "expected session for primary principal");
-  assert.ok(sessionB, "expected session for alternate principal");
+test("different principals receive different sessions", async () => {
+  const sessionA = await openSession(TEST_PRINCIPAL);
+  const sessionB = await openSession(ALT_TEST_PRINCIPAL);
 
   assert.notEqual(
     sessionA,
@@ -191,31 +203,66 @@ test("different principals receive different sessions", () => {
     "different principals should not share the same session",
   );
 
-  assert.equal(validateSession(sessionA, TEST_PRINCIPAL), true);
-  assert.equal(validateSession(sessionB, ALT_TEST_PRINCIPAL), true);
-  assert.equal(validateSession(sessionA, ALT_TEST_PRINCIPAL), false);
-  assert.equal(validateSession(sessionB, TEST_PRINCIPAL), false);
+  assert.equal(
+    await touchSessionForPrincipal(sessionA, TEST_PRINCIPAL),
+    true,
+  );
+  assert.equal(
+    await touchSessionForPrincipal(sessionB, ALT_TEST_PRINCIPAL),
+    true,
+  );
+  assert.equal(
+    await touchSessionForPrincipal(sessionA, ALT_TEST_PRINCIPAL),
+    false,
+  );
+  assert.equal(
+    await touchSessionForPrincipal(sessionB, TEST_PRINCIPAL),
+    false,
+  );
 
   logPass("session_isolation", { sessionA, sessionB });
 });
 
-test("tool list is stable while sessions are created and touched repeatedly", () => {
+test("an unknown session is rejected", async () => {
+  assert.equal(
+    await touchSessionForPrincipal("missing-session", TEST_PRINCIPAL),
+    false,
+  );
+
+  logPass("unknown_session_rejected");
+});
+
+test("a deleted session is no longer valid", async () => {
+  const sessionId = await openSession(TEST_PRINCIPAL);
+
+  assert.equal(
+    await deleteSessionForPrincipal(sessionId, ALT_TEST_PRINCIPAL),
+    false,
+    "another principal must not be able to delete the session",
+  );
+
+  assert.equal(await deleteSessionForPrincipal(sessionId, TEST_PRINCIPAL), true);
+
+  assert.equal(
+    await touchSessionForPrincipal(sessionId, TEST_PRINCIPAL),
+    false,
+    "deleted session should no longer validate",
+  );
+
+  logPass("session_deleted", { sessionId });
+});
+
+test("tool list is stable while sessions are created and touched repeatedly", async () => {
   const baseline = JSON.stringify(getSortedToolNames());
 
   for (let i = 0; i < REPEAT_COUNT; i++) {
     const principal = i % 2 === 0 ? TEST_PRINCIPAL : ALT_TEST_PRINCIPAL;
-    const sessionId = getOrCreateSessionForPrincipal(principal);
+    const sessionId = await openSession(principal);
 
     assert.equal(
-      validateSession(sessionId, principal),
+      await touchSessionForPrincipal(sessionId, principal),
       true,
-      `cycle_${i + 1}: expected session to validate`,
-    );
-
-    assert.equal(
-      touchSession(sessionId),
-      true,
-      `cycle_${i + 1}: expected touchSession to succeed`,
+      `cycle_${i + 1}: expected touchSessionForPrincipal to succeed`,
     );
 
     const current = JSON.stringify(getSortedToolNames());
@@ -266,12 +313,7 @@ test("tool call executes successfully with and without an active session", async
   const chosenToolName = getChosenToolName();
   const chosenToolArgs = getChosenToolArgs();
 
-  const sessionId = getOrCreateSessionForPrincipal(TEST_PRINCIPAL);
-
-  assert.ok(
-    validateSession(sessionId, TEST_PRINCIPAL),
-    "session should be valid",
-  );
+  const sessionId = await openSession(TEST_PRINCIPAL);
 
   const withSession = await executeTool(chosenToolName, chosenToolArgs);
 
@@ -286,9 +328,9 @@ test("tool call executes successfully with and without an active session", async
   });
 
   assert.equal(
-    touchSession(sessionId),
+    await touchSessionForPrincipal(sessionId, TEST_PRINCIPAL),
     true,
-    "expected touchSession to succeed",
+    "expected touchSessionForPrincipal to succeed",
   );
 
   const withoutSession = await executeTool(chosenToolName, chosenToolArgs);
@@ -334,9 +376,7 @@ test("mixed session and stateless flows do not affect tool availability", async 
 
   for (let i = 0; i < REPEAT_COUNT; i++) {
     const principal = i % 2 === 0 ? TEST_PRINCIPAL : ALT_TEST_PRINCIPAL;
-    const sessionId = getOrCreateSessionForPrincipal(principal);
-
-    assert.equal(validateSession(sessionId, principal), true);
+    const sessionId = await openSession(principal);
 
     const withSession = await executeTool(chosenToolName, chosenToolArgs);
 
@@ -352,7 +392,7 @@ test("mixed session and stateless flows do not affect tool availability", async 
       `cycle_${i + 1}: expected stateless tool result`,
     );
 
-    assert.equal(touchSession(sessionId), true);
+    assert.equal(await touchSessionForPrincipal(sessionId, principal), true);
 
     const current = JSON.stringify(getSortedToolNames());
 
@@ -404,13 +444,7 @@ test("tool registry remains stable under repeated mixed operations", async () =>
 
   for (let i = 0; i < STRESS_COUNT; i++) {
     const principal = i % 2 === 0 ? TEST_PRINCIPAL : ALT_TEST_PRINCIPAL;
-    const sessionId = getOrCreateSessionForPrincipal(principal);
-
-    assert.equal(
-      validateSession(sessionId, principal),
-      true,
-      `stress_${i + 1}: expected session to validate`,
-    );
+    const sessionId = await openSession(principal);
 
     if (i % 3 === 0) {
       const result = await executeTool(chosenToolName, chosenToolArgs);

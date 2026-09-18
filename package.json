@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.4",
     "dotenv": "17.4.2",
     "zod": "4.6.5"
   },
