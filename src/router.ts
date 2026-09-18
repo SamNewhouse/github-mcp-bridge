@@ -17,11 +17,10 @@ import {
 } from "./lib/http";
 import { createRequestLogger } from "./lib/logging";
 import {
+  createSession,
   deleteSessionForPrincipal,
-  getOrCreateSessionForPrincipal,
   getSessionIdFromHeaders,
-  touchSession,
-  validateSession,
+  touchSessionForPrincipal,
 } from "./lib/session";
 import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
@@ -132,52 +131,60 @@ function resolveProtocolVersion(_params: unknown): string {
 /**
  * Resolves or creates a session for the initialize request.
  *
+ * If the client supplied a valid session ID, it is resumed and its idle
+ * window is refreshed. Otherwise a new session is created.
+ *
  * @param principal - The authenticated request principal.
  * @param headers - The incoming request headers.
  * @returns Session information used during initialization.
  */
-function resolveInitialSession(
+async function resolveInitialSession(
   principal: string,
   headers: http.IncomingHttpHeaders,
 ) {
   const requestedSessionId = getSessionIdFromHeaders(headers);
-  const hasValidRequestedSession =
+
+  if (
     requestedSessionId !== null &&
-    validateSession(requestedSessionId, principal);
-
-  const sessionId = hasValidRequestedSession
-    ? requestedSessionId
-    : getOrCreateSessionForPrincipal(principal);
-
-  touchSession(sessionId);
+    (await touchSessionForPrincipal(requestedSessionId, principal))
+  ) {
+    return {
+      sessionId: requestedSessionId,
+      requestedSessionId,
+      hasValidRequestedSession: true,
+      autoResumed: false,
+    };
+  }
 
   return {
-    sessionId,
+    sessionId: await createSession(principal),
     requestedSessionId,
-    hasValidRequestedSession,
-    autoResumed: !hasValidRequestedSession,
+    hasValidRequestedSession: false,
+    autoResumed: true,
   };
 }
 
 /**
  * Requires a valid session ID for post-initialization MCP requests.
  *
+ * Validates the session against the principal and slides its idle expiry
+ * forward in a single store round trip.
+ *
  * @param principal - The authenticated request principal.
  * @param headers - The incoming request headers.
- * @returns The validated session ID.
- * @throws When the request does not contain a valid session.
+ * @returns The validated session ID, or null when the session is missing,
+ * expired, or belongs to a different principal.
  */
-function requireSession(
+async function requireSession(
   principal: string,
   headers: http.IncomingHttpHeaders,
-): string | null {
+): Promise<string | null> {
   const sessionId = getSessionIdFromHeaders(headers);
 
-  if (!sessionId || !validateSession(sessionId, principal)) {
+  if (!sessionId || !(await touchSessionForPrincipal(sessionId, principal))) {
     return null;
   }
 
-  touchSession(sessionId);
   return sessionId;
 }
 
@@ -289,7 +296,7 @@ export async function handleMcpRequest(
         return sendJson(res, 400, { error: "Missing MCP session ID" });
       }
 
-      const deleted = deleteSessionForPrincipal(sessionId, principal);
+      const deleted = await deleteSessionForPrincipal(sessionId, principal);
 
       if (!deleted) {
         log.warn("session_delete_rejected", {
@@ -341,7 +348,7 @@ export async function handleMcpRequest(
     const body = parsed.data;
 
     if (body.method === "initialize") {
-      const session = resolveInitialSession(principal, req.headers);
+      const session = await resolveInitialSession(principal, req.headers);
       const protocolVersion = resolveProtocolVersion(body.params);
 
       const logData = {
@@ -371,7 +378,7 @@ export async function handleMcpRequest(
       );
     }
 
-    const sessionId = requireSession(principal, req.headers);
+    const sessionId = await requireSession(principal, req.headers);
 
     if (!sessionId) {
       log.warn("mcp_session_required", {
