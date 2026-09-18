@@ -1,11 +1,7 @@
 import { getGithubPatForOwner } from "../config";
 import { AppError } from "../lib/errors";
 import { logError, logInfo, logWarn } from "../lib/logging";
-import {
-  getFromCache,
-  invalidateCacheForPath,
-  setInCache,
-} from "./cache";
+import { getFromCache, invalidateCacheForPath, setInCache } from "./cache";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -81,10 +77,7 @@ export async function githubRequest<T>(
   const owner = init.owner ?? "";
   const { pat, key: patKey } = getGithubPatForOwner(owner);
   const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    REQUEST_TIMEOUT_MS,
-  );
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/vnd.github+json");
@@ -97,12 +90,7 @@ export async function githubRequest<T>(
       ? JSON.parse(init.body as string)
       : undefined;
 
-    const cached = getFromCache<T>(
-      method,
-      path,
-      bodyForCache,
-      representation,
-    );
+    const cached = getFromCache<T>(method, path, bodyForCache, representation);
 
     if (cached !== null) {
       const durationMs = Date.now() - startedAt;
@@ -171,10 +159,7 @@ export async function githubRequest<T>(
 
     const contentLength = response.headers.get("content-length");
 
-    if (
-      contentLength &&
-      Number(contentLength) > MAX_RESPONSE_SIZE_BYTES
-    ) {
+    if (contentLength && Number(contentLength) > MAX_RESPONSE_SIZE_BYTES) {
       logError("github_response_too_large", {
         method,
         path,

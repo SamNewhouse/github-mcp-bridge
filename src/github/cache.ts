@@ -67,12 +67,7 @@ function cacheKey(
   body?: unknown,
   representation = "default",
 ): string {
-  return JSON.stringify([
-    method,
-    path,
-    body ?? null,
-    representation,
-  ]);
+  return JSON.stringify([method, path, body ?? null, representation]);
 }
 
 function evictOldest(): void {
@@ -180,12 +175,7 @@ export function invalidateCacheForPath(pathPattern: string): void {
 
   for (const key of cache.keys()) {
     try {
-      const [, path] = JSON.parse(key) as [
-        string,
-        string,
-        unknown,
-        string?,
-      ];
+      const [, path] = JSON.parse(key) as [string, string, unknown, string?];
 
       const sameRepository =
         pathPrefix === path.split("/").slice(0, 3).join("/");
