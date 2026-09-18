@@ -2,6 +2,7 @@ import { getGithubPatForOwner } from "../config";
 import { AppError } from "../lib/errors";
 import { logError, logInfo, logWarn } from "../lib/logging";
 import { getFromCache, invalidateCacheForPath, setInCache } from "./cache";
+import { mapGithubStatus } from "./status";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -14,58 +15,7 @@ type GithubRequestOptions = RequestInit & {
   owner?: string;
 };
 
-/**
- * Maps a GitHub HTTP status and response body to an application error.
- *
- * @param status - The HTTP status returned by GitHub.
- * @param body - The response body returned by GitHub.
- * @param patKey - The environment variable name used for authentication.
- * @returns The corresponding application error.
- */
-function mapGithubStatus(
-  status: number,
-  body: string,
-  patKey: string,
-): AppError {
-  switch (status) {
-    case 401:
-      return new AppError(
-        `GitHub authentication failed — check ${patKey}`,
-        401,
-      );
-
-    case 403:
-      if (body.includes("rate limit") || body.includes("API rate limit")) {
-        return new AppError("GitHub rate limit exceeded — retry later", 429);
-      }
-
-      return new AppError(
-        "GitHub request forbidden — insufficient PAT scopes",
-        403,
-      );
-
-    case 404:
-      return new AppError("GitHub resource not found", 404);
-
-    case 409:
-      return new AppError(
-        "GitHub conflict — resource already exists or is out of date",
-        409,
-      );
-
-    case 422:
-      return new AppError(`GitHub validation error: ${body}`, 422);
-
-    case 429:
-      return new AppError("GitHub rate limit exceeded — retry later", 429);
-
-    default:
-      return new AppError(
-        `GitHub API error (${status}): ${body || "unknown error"}`,
-        status,
-      );
-  }
-}
+const inFlightRequests = new Map<string, Promise<unknown>>();
 
 /**
  * Creates the cache representation identifier for a request.
@@ -86,11 +36,35 @@ function getCacheRepresentation(
 }
 
 /**
+ * Creates a key for coalescing identical in-flight GET requests.
+ *
+ * @param method - The HTTP method.
+ * @param path - The GitHub API path.
+ * @param body - The request body, if present.
+ * @param representation - The response representation.
+ * @returns A request key.
+ */
+function getRequestKey(
+  method: string,
+  path: string,
+  body: unknown,
+  representation: string,
+): string {
+  return JSON.stringify([
+    method.toUpperCase(),
+    path,
+    body ?? null,
+    representation,
+  ]);
+}
+
+/**
  * Sends a request to the GitHub API.
  *
  * GET responses are cached using the request method, path, body, and response
- * representation. Successful mutations invalidate cached entries associated
- * with the affected repository.
+ * representation. Identical concurrent GET requests share one upstream
+ * request within the current process. Successful mutations invalidate cached
+ * entries associated with the affected repository.
  *
  * @typeParam T - The expected response type.
  * @param path - The GitHub API path.
@@ -117,12 +91,10 @@ export async function githubRequest<T>(
   }
 
   const representation = getCacheRepresentation(headers, responseType);
+  const bodyForCache = init.body ? JSON.parse(init.body as string) : undefined;
+  const requestKey = getRequestKey(method, path, bodyForCache, representation);
 
   if (method === "GET") {
-    const bodyForCache = init.body
-      ? JSON.parse(init.body as string)
-      : undefined;
-
     const cached = getFromCache<T>(method, path, bodyForCache, representation);
 
     if (cached !== null) {
@@ -138,6 +110,20 @@ export async function githubRequest<T>(
       clearTimeout(timeoutId);
       return cached;
     }
+
+    const existingRequest = inFlightRequests.get(requestKey);
+
+    if (existingRequest) {
+      clearTimeout(timeoutId);
+
+      logInfo("github_request_coalesced", {
+        method,
+        path,
+        representation,
+      });
+
+      return (await existingRequest) as T;
+    }
   }
 
   headers.set("Authorization", `Bearer ${pat}`);
@@ -148,126 +134,143 @@ export async function githubRequest<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  try {
-    const response = await fetch(`${GITHUB_API_BASE}${path}`, {
-      ...init,
-      headers,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    const durationMs = Date.now() - startedAt;
-    const remaining = response.headers.get("x-ratelimit-remaining");
-    const resetEpoch = response.headers.get("x-ratelimit-reset");
-
-    if (remaining !== null && Number(remaining) < 100) {
-      const resetAt = resetEpoch
-        ? new Date(Number(resetEpoch) * 1000).toISOString()
-        : null;
-
-      logWarn("github_rate_limit_low", {
-        method,
-        path,
-        remaining: Number(remaining),
-        resetAt,
+  const requestPromise = (async (): Promise<T> => {
+    try {
+      const response = await fetch(`${GITHUB_API_BASE}${path}`, {
+        ...init,
+        headers,
+        signal: controller.signal,
       });
-    }
 
-    if (!response.ok) {
-      const text = await response.text();
+      clearTimeout(timeoutId);
 
-      logError("github_request_failed", {
+      const durationMs = Date.now() - startedAt;
+      const remaining = response.headers.get("x-ratelimit-remaining");
+      const resetEpoch = response.headers.get("x-ratelimit-reset");
+
+      if (remaining !== null && Number(remaining) < 100) {
+        const resetAt = resetEpoch
+          ? new Date(Number(resetEpoch) * 1000).toISOString()
+          : null;
+
+        logWarn("github_rate_limit_low", {
+          method,
+          path,
+          remaining: Number(remaining),
+          resetAt,
+        });
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+
+        logError("github_request_failed", {
+          method,
+          path,
+          status: response.status,
+          statusText: response.statusText,
+          durationMs,
+          patKey,
+          responseBody: text || null,
+        });
+
+        throw mapGithubStatus(response.status, text, patKey);
+      }
+
+      const contentLength = response.headers.get("content-length");
+
+      if (contentLength && Number(contentLength) > MAX_RESPONSE_SIZE_BYTES) {
+        logError("github_response_too_large", {
+          method,
+          path,
+          contentLength: Number(contentLength),
+          limitBytes: MAX_RESPONSE_SIZE_BYTES,
+        });
+
+        throw new AppError("GitHub response too large", 413);
+      }
+
+      let result: T;
+
+      if (responseType === "text") {
+        result = (await response.text()) as T;
+      } else {
+        result = (await response.json()) as T;
+      }
+
+      if (method === "GET") {
+        setInCache(method, path, bodyForCache, result, {
+          etag: response.headers.get("etag") || undefined,
+          representation,
+        });
+
+        logInfo("github_cache_set", {
+          method,
+          path,
+          representation,
+        });
+      }
+
+      if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
+        invalidateCacheForPath(path);
+
+        logInfo("github_cache_invalidated", {
+          method,
+          path,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      const durationMs = Date.now() - startedAt;
+
+      if (error instanceof Error && error.name === "AbortError") {
+        logError("github_request_timeout", {
+          method,
+          path,
+          durationMs,
+        });
+
+        throw new AppError(
+          `GitHub API request timed out after ${REQUEST_TIMEOUT_MS}ms`,
+          504,
+        );
+      }
+
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      logError("github_request_exception", {
         method,
         path,
-        status: response.status,
-        statusText: response.statusText,
         durationMs,
-        patKey,
-        responseBody: text || null,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        message: error instanceof Error ? error.message : String(error),
       });
 
-      throw mapGithubStatus(response.status, text, patKey);
-    }
-
-    const contentLength = response.headers.get("content-length");
-
-    if (contentLength && Number(contentLength) > MAX_RESPONSE_SIZE_BYTES) {
-      logError("github_response_too_large", {
-        method,
-        path,
-        contentLength: Number(contentLength),
-        limitBytes: MAX_RESPONSE_SIZE_BYTES,
-      });
-
-      throw new AppError("GitHub response too large", 413);
-    }
-
-    let result: T;
-
-    if (responseType === "text") {
-      result = (await response.text()) as T;
-    } else {
-      result = (await response.json()) as T;
-    }
-
-    if (method === "GET") {
-      const bodyForCache = init.body
-        ? JSON.parse(init.body as string)
-        : undefined;
-
-      setInCache(method, path, bodyForCache, result, {
-        etag: response.headers.get("etag") || undefined,
-        representation,
-      });
-
-      logInfo("github_cache_set", {
-        method,
-        path,
-        representation,
-      });
-    }
-
-    if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
-      invalidateCacheForPath(path);
-
-      logInfo("github_cache_invalidated", {
-        method,
-        path,
-      });
-    }
-
-    return result;
-  } catch (error) {
-    clearTimeout(timeoutId);
-
-    const durationMs = Date.now() - startedAt;
-
-    if (error instanceof Error && error.name === "AbortError") {
-      logError("github_request_timeout", {
-        method,
-        path,
-        durationMs,
-      });
-
-      throw new AppError(
-        `GitHub API request timed out after ${REQUEST_TIMEOUT_MS}ms`,
-        504,
-      );
-    }
-
-    if (error instanceof AppError) {
       throw error;
     }
+  })();
 
-    logError("github_request_exception", {
-      method,
-      path,
-      durationMs,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      message: error instanceof Error ? error.message : String(error),
-    });
+  if (method === "GET") {
+    inFlightRequests.set(requestKey, requestPromise);
 
-    throw error;
+    void requestPromise.then(
+      () => {
+        if (inFlightRequests.get(requestKey) === requestPromise) {
+          inFlightRequests.delete(requestKey);
+        }
+      },
+      () => {
+        if (inFlightRequests.get(requestKey) === requestPromise) {
+          inFlightRequests.delete(requestKey);
+        }
+      },
+    );
   }
+
+  return requestPromise;
 }
