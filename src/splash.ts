@@ -1,4 +1,4 @@
-import packageJson from '../package.json' with { type: 'json' };
+const packageJson = require('../package.json');
 
 function splashHead(): string {
   return `
