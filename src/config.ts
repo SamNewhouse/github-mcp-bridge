@@ -43,6 +43,7 @@ function getOptionalPositiveIntEnv(key: string, fallback: number): number {
       fallback,
       message: `${key} must be a positive integer; using fallback`,
     });
+
     return fallback;
   }
 
@@ -91,6 +92,13 @@ export function getConnectorSecrets(): string[] {
 
 export function getPort(): number {
   return getEnv().PORT;
+}
+
+export function getMcpSessionIdleTtlMs(): number {
+  return getOptionalPositiveIntEnv(
+    "MCP_SESSION_IDLE_TTL_MS",
+    5 * 60 * 1000,
+  );
 }
 
 export function getMcpSessionMaxTtlMs(): number {
