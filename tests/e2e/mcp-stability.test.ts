@@ -20,12 +20,17 @@ const TEST_PRINCIPAL = "test-principal";
 const ALT_TEST_PRINCIPAL = "test-principal-alt";
 const TEST_TOOL_NAME = process.env.MCP_TEST_TOOL_NAME || "";
 const TEST_TOOL_ARGS = TEST_TOOL_NAME
-  ? (JSON.parse(process.env.MCP_TEST_TOOL_ARGS || "{}") as Record<string, unknown>)
+  ? (JSON.parse(process.env.MCP_TEST_TOOL_ARGS || "{}") as Record<
+      string,
+      unknown
+    >)
   : {};
 
 function logPass(step: string, details: Record<string, unknown> = {}): void {
   const compact = Object.entries(details)
-    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .filter(
+      ([, value]) => value !== undefined && value !== null && value !== "",
+    )
     .map(([key, value]) => `${key}=${String(value)}`)
     .join(" ");
 
@@ -72,7 +77,10 @@ test("tool registry is populated and internally consistent", () => {
       `tool ${tool.name} should have a description`,
     );
     assert.equal(typeof tool.inputSchema, "object");
-    assert.ok(tool.inputSchema, `tool ${tool.name} should have an input schema`);
+    assert.ok(
+      tool.inputSchema,
+      `tool ${tool.name} should have an input schema`,
+    );
   }
 
   logPass("tool_registry_consistent", { toolCount: tools.length });
@@ -83,7 +91,10 @@ test("tool list stays stable across repeated cycles", () => {
 
   for (let i = 0; i < REPEAT_COUNT; i++) {
     const toolNames = getSortedToolNames();
-    assert.ok(toolNames.length > 0, `cycle_${i + 1}: expected at least one tool`);
+    assert.ok(
+      toolNames.length > 0,
+      `cycle_${i + 1}: expected at least one tool`,
+    );
 
     toolNameSets.push(toolNames);
 
@@ -219,17 +230,27 @@ test("tool call executes successfully with and without an active session", async
   const chosenToolArgs = getChosenToolArgs();
 
   const sessionId = getOrCreateSessionForPrincipal(TEST_PRINCIPAL);
-  assert.ok(validateSession(sessionId, TEST_PRINCIPAL), "session should be valid");
+  assert.ok(
+    validateSession(sessionId, TEST_PRINCIPAL),
+    "session should be valid",
+  );
 
   const withSession = await executeTool(chosenToolName, chosenToolArgs);
-  assert.ok(withSession !== undefined, "expected a result from tool call with session");
+  assert.ok(
+    withSession !== undefined,
+    "expected a result from tool call with session",
+  );
 
   logPass("tool_call_with_session", {
     tool: chosenToolName,
     sessionId,
   });
 
-  assert.equal(touchSession(sessionId), true, "expected touchSession to succeed");
+  assert.equal(
+    touchSession(sessionId),
+    true,
+    "expected touchSession to succeed",
+  );
 
   const withoutSession = await executeTool(chosenToolName, chosenToolArgs);
   assert.ok(

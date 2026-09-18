@@ -18,13 +18,9 @@ interface CacheConfig {
 
 const CACHE_CONFIGS: CacheConfig[] = [
   {
-    patterns: [
-      /^\/users\/[^/]+$/,
-      /^\/orgs\/[^/]+$/,
-      /^\/rate_limit$/,
-    ],
+    patterns: [/^\/users\/[^/]+$/, /^\/orgs\/[^/]+$/, /^\/rate_limit$/],
     ttlMs: 300_000,
-    description: 'Static profiles',
+    description: "Static profiles",
   },
   {
     patterns: [
@@ -32,7 +28,7 @@ const CACHE_CONFIGS: CacheConfig[] = [
       /^\/repos\/[^/]+\/[^/]+\/(branches|languages|topics)$/,
     ],
     ttlMs: 120_000,
-    description: 'Repository metadata',
+    description: "Repository metadata",
   },
   {
     patterns: [
@@ -42,7 +38,7 @@ const CACHE_CONFIGS: CacheConfig[] = [
       /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+\/reviews$/,
     ],
     ttlMs: 60_000,
-    description: 'Pull request details',
+    description: "Pull request details",
   },
   {
     patterns: [
@@ -52,7 +48,7 @@ const CACHE_CONFIGS: CacheConfig[] = [
       /^\/repos\/[^/]+\/[^/]+\/branches$/,
     ],
     ttlMs: 30_000,
-    description: 'Frequently changing lists',
+    description: "Frequently changing lists",
   },
 ];
 
@@ -64,8 +60,18 @@ function estimateSize(value: unknown): number {
   }
 }
 
-function cacheKey(method: string, path: string, body?: unknown): string {
-  return JSON.stringify([method, path, body ?? null]);
+function cacheKey(
+  method: string,
+  path: string,
+  body?: unknown,
+  representation?: string,
+): string {
+  return JSON.stringify([
+    method,
+    path,
+    body ?? null,
+    representation ?? "default",
+  ]);
 }
 
 function evictOldest(): void {
@@ -85,24 +91,24 @@ function evictUntilUnderLimit(): void {
     for (const entry of cache.values()) {
       totalSize += entry.size;
     }
-    
+
     if (totalSize <= MAX_CACHE_SIZE_BYTES && cache.size <= MAX_CACHE_ENTRIES) {
       break;
     }
-    
+
     evictOldest();
   }
 }
 
 export function getCacheTTL(path: string): number {
-  const normalizedPath = path.split('?')[0].replace(/\/$/, '');
-  
+  const normalizedPath = path.split("?")[0].replace(/\/$/, "");
+
   for (const config of CACHE_CONFIGS) {
-    if (config.patterns.some(pattern => pattern.test(normalizedPath))) {
+    if (config.patterns.some((pattern) => pattern.test(normalizedPath))) {
       return config.ttlMs;
     }
   }
-  
+
   return DEFAULT_TTL_MS;
 }
 
@@ -135,22 +141,22 @@ export function setInCache<T>(
   const etag = options?.etag;
   const key = cacheKey(method, path, body);
   const size = estimateSize(value);
-  
+
   // Evict if at capacity
   if (cache.size >= MAX_CACHE_ENTRIES) {
     evictOldest();
   }
-  
+
   // Check if adding this would exceed size limit
   let totalSize = 0;
   for (const entry of cache.values()) {
     totalSize += entry.size;
   }
-  
+
   if (totalSize + size > MAX_CACHE_SIZE_BYTES) {
     evictUntilUnderLimit();
   }
-  
+
   cache.set(key, {
     value,
     expiresAt: Date.now() + ttlMs,
@@ -161,27 +167,35 @@ export function setInCache<T>(
 
 export function invalidateCacheForPath(pathPattern: string): void {
   const keysToDelete: string[] = [];
-  
+
   for (const key of cache.keys()) {
     try {
       const [method, path] = JSON.parse(key as string) as [string, string];
-      if (path.startsWith(pathPattern) || pathPattern.split('/').slice(0, 3).join('/') === path.split('/').slice(0, 3).join('/')) {
+      if (
+        path.startsWith(pathPattern) ||
+        pathPattern.split("/").slice(0, 3).join("/") ===
+          path.split("/").slice(0, 3).join("/")
+      ) {
         keysToDelete.push(key);
       }
     } catch {
       // Skip malformed keys
     }
   }
-  
+
   for (const key of keysToDelete) {
     cache.delete(key);
   }
 }
 
-export function getCacheStats(): { size: number; entries: number; keys: string[] } {
+export function getCacheStats(): {
+  size: number;
+  entries: number;
+  keys: string[];
+} {
   const now = Date.now();
   const validKeys: string[] = [];
-  
+
   for (const [key, entry] of cache.entries()) {
     if (now <= entry.expiresAt) {
       validKeys.push(key);
@@ -189,7 +203,7 @@ export function getCacheStats(): { size: number; entries: number; keys: string[]
       cache.delete(key);
     }
   }
-  
+
   return {
     size: cache.size,
     entries: validKeys.length,

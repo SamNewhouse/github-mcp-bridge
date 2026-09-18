@@ -8,7 +8,6 @@ const GITHUB_API_VERSION = "2022-11-28";
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
-
 type GithubRequestOptions = RequestInit & {
   responseType?: "json" | "text";
   /** GitHub owner (user or org) used to select the correct PAT. */
@@ -75,7 +74,9 @@ export async function githubRequest<T>(
 
   // Check cache for GET requests
   if (method === "GET") {
-    const bodyForCache = init.body ? JSON.parse(init.body as string) : undefined;
+    const bodyForCache = init.body
+      ? JSON.parse(init.body as string)
+      : undefined;
     const cached = getFromCache(method, path, bodyForCache);
     if (cached !== null) {
       const durationMs = Date.now() - startedAt;
@@ -158,8 +159,12 @@ export async function githubRequest<T>(
 
     // Cache successful GET responses with TTL
     if (method === "GET") {
-      const bodyForCache = init.body ? JSON.parse(init.body as string) : undefined;
-      setInCache(method, path, bodyForCache, result, { etag: response.headers.get("etag") || undefined });
+      const bodyForCache = init.body
+        ? JSON.parse(init.body as string)
+        : undefined;
+      setInCache(method, path, bodyForCache, result, {
+        etag: response.headers.get("etag") || undefined,
+      });
       logInfo("github_cache_set", { method, path });
     }
 

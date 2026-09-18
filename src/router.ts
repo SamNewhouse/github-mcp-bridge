@@ -35,10 +35,7 @@ const CACHED_TOOL_LIST = getToolList();
 const CACHED_TOOL_LIST_RESPONSE = { tools: CACHED_TOOL_LIST };
 
 // Add admin tools for cache management
-const ADMIN_TOOLS = new Set([
-  "admin/cache/stats",
-  "admin/cache/clear",
-]);
+const ADMIN_TOOLS = new Set(["admin/cache/stats", "admin/cache/clear"]);
 
 const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -381,7 +378,10 @@ export async function handleMcpRequest(
             body.id ?? null,
             -32603,
             "Internal error",
-            { tool: toolName, message: error instanceof Error ? error.message : String(error) },
+            {
+              tool: toolName,
+              message: error instanceof Error ? error.message : String(error),
+            },
           );
         }
       }
