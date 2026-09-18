@@ -1,5 +1,4 @@
-// Splash page components
-// Each function returns an HTML string fragment. Compose them in getSplashHtml.
+import packageJson from '../package.json' with { type: 'json' };
 
 function splashHead(): string {
   return `
@@ -89,6 +88,7 @@ function splashStatus(): string {
 }
 
 function splashMeta(toolCount: number): string {
+  const nodeVersion = process.version.replace('v', '');
   return `
   <style>
     .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -103,8 +103,8 @@ function splashMeta(toolCount: number): string {
       <div class="meta-value accent">${toolCount}</div>
     </div>
     <div class="meta-item">
-      <div class="meta-label">Protocol</div>
-      <div class="meta-value">MCP 2025</div>
+      <div class="meta-label">Version</div>
+      <div class="meta-value">${packageJson.version}</div>
     </div>
     <div class="meta-item">
       <div class="meta-label">Transport</div>
@@ -112,7 +112,7 @@ function splashMeta(toolCount: number): string {
     </div>
     <div class="meta-item">
       <div class="meta-label">Runtime</div>
-      <div class="meta-value">Node 24</div>
+      <div class="meta-value">Node ${nodeVersion}</div>
     </div>
   </div>`;
 }
