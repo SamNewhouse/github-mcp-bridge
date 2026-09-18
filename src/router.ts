@@ -22,12 +22,23 @@ import {
   touchSession,
   validateSession,
 } from "./lib/session";
+import { getCacheStats, clearCache } from "./github/cache";
 import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
 
 const RPC_UNAUTHORIZED = -32001;
 const SUPPORTED_PROTOCOL_VERSION = "2025-03-26";
+
+// Cache the tool list at module level - never changes at runtime
+const CACHED_TOOL_LIST = getToolList();
+const CACHED_TOOL_LIST_RESPONSE = { tools: CACHED_TOOL_LIST };
+
+// Add admin tools for cache management
+const ADMIN_TOOLS = new Set([
+  "admin/cache/stats",
+  "admin/cache/clear",
+]);
 
 const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -77,8 +88,36 @@ function toMcpToolResult(result: unknown): McpToolResult {
   };
 }
 
+// Handle admin cache management tools
+async function handleAdminTool(
+  toolName: string,
+  principal: string,
+): Promise<unknown> {
+  switch (toolName) {
+    case "admin/cache/stats": {
+      const stats = getCacheStats();
+      return {
+        ...stats,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    case "admin/cache/clear": {
+      clearCache();
+      return {
+        ok: true,
+        message: "Cache cleared successfully",
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    default:
+      throw new Error(`Unknown admin tool: ${toolName}`);
+  }
+}
+
 function sendSplashPage(res: http.ServerResponse): void {
-  const html = getSplashHtml(getToolList().length);
+  const html = getSplashHtml(CACHED_TOOL_LIST.length);
   res.statusCode = 200;
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.setHeader(
@@ -244,7 +283,6 @@ export async function handleMcpRequest(
       };
 
       if (session.autoResumed) {
-        // Existing session reused; client just didn't send the header.
         (log as any).debug?.("mcp_session_auto_resumed", logData);
       } else {
         log.info("mcp_session_initialized", logData);
@@ -279,22 +317,20 @@ export async function handleMcpRequest(
     }
 
     if (body.method === "tools/list") {
-      const tools = getToolList();
-
       log.info("tools_list_requested", {
         id: body.id ?? null,
         sessionId: session.sessionId,
         requestedSessionId: session.requestedSessionId,
         clientSuppliedValidSession: session.hasValidRequestedSession,
         autoResumed: session.autoResumed,
-        toolCount: tools.length,
-        toolNames: tools.map((tool) => tool.name),
+        toolCount: CACHED_TOOL_LIST.length,
+        toolNames: CACHED_TOOL_LIST.map((tool) => tool.name),
       });
 
       return sendJsonRpcResultWithSession(
         res,
         body.id ?? null,
-        { tools },
+        CACHED_TOOL_LIST_RESPONSE,
         session.sessionId,
       );
     }
@@ -321,6 +357,34 @@ export async function handleMcpRequest(
 
       const toolName = params.data.name;
       const toolArgs = params.data.arguments;
+
+      // Handle admin tools
+      if (ADMIN_TOOLS.has(toolName)) {
+        try {
+          const result = await handleAdminTool(toolName, principal);
+          const mcpResult = toMcpToolResult(result);
+
+          return sendJsonRpcResultWithSession(
+            res,
+            body.id ?? null,
+            mcpResult,
+            session.sessionId,
+          );
+        } catch (error) {
+          log.error("admin_tool_failed", {
+            tool: toolName,
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          return sendJsonRpcError(
+            res,
+            body.id ?? null,
+            -32603,
+            "Internal error",
+            { tool: toolName, message: error instanceof Error ? error.message : String(error) },
+          );
+        }
+      }
 
       try {
         const result = await executeTool(toolName, toolArgs);

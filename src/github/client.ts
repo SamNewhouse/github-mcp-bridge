@@ -1,12 +1,13 @@
 import { getGithubPatForOwner } from "../config";
 import { AppError } from "../lib/errors";
-import { logError, logWarn } from "../lib/logging";
-import { setInCache } from "./cache";
+import { logError, logWarn, logInfo } from "../lib/logging";
+import { getFromCache, setInCache, invalidateCacheForPath } from "./cache";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
 
 type GithubRequestOptions = RequestInit & {
   responseType?: "json" | "text";
@@ -71,6 +72,18 @@ export async function githubRequest<T>(
   const { pat, key: patKey } = getGithubPatForOwner(owner);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  // Check cache for GET requests
+  if (method === "GET") {
+    const bodyForCache = init.body ? JSON.parse(init.body as string) : undefined;
+    const cached = getFromCache(method, path, bodyForCache);
+    if (cached !== null) {
+      const durationMs = Date.now() - startedAt;
+      logInfo("github_cache_hit", { method, path, durationMs });
+      clearTimeout(timeoutId);
+      return cached as T;
+    }
+  }
 
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/vnd.github+json");
@@ -143,10 +156,17 @@ export async function githubRequest<T>(
       result = (await response.json()) as T;
     }
 
-    // Cache successful GET responses only
+    // Cache successful GET responses with TTL
     if (method === "GET") {
       const bodyForCache = init.body ? JSON.parse(init.body as string) : undefined;
-      setInCache(method, path, bodyForCache, result);
+      setInCache(method, path, bodyForCache, result, { etag: response.headers.get("etag") || undefined });
+      logInfo("github_cache_set", { method, path });
+    }
+
+    // Invalidate cache on mutations
+    if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
+      invalidateCacheForPath(path);
+      logInfo("github_cache_invalidated", { method, path });
     }
 
     return result;
