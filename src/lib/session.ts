@@ -13,11 +13,27 @@ let redisClient: Redis | null = null;
 
 function redis(): Redis {
   if (!redisClient) {
-    const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+    const url =
+      process.env.UPSTASH_REDIS_KV_REST_API_URL ??
+      process.env.KV_REST_API_URL ??
+      process.env.UPSTASH_REDIS_REST_URL;
+    const token =
+      process.env.UPSTASH_REDIS_KV_REST_API_TOKEN ??
+      process.env.KV_REST_API_TOKEN ??
+      process.env.UPSTASH_REDIS_REST_TOKEN;
 
     if (!url || !token) {
-      throw new Error("Redis REST URL/token env vars are not set");
+      // No Redis credentials - use in-memory
+      return null as unknown as Redis;
+    }
+
+    // Only initialize Redis client in production (Vercel)
+    // Check for Vercel-specific environment
+    const isVercel = process.env.VERCEL === "1";
+    
+    if (!isVercel) {
+      // Don't use Redis in local dev even if credentials are present
+      return null as unknown as Redis;
     }
 
     redisClient = new Redis({ url, token });
@@ -28,12 +44,35 @@ function redis(): Redis {
 
 const key = (sessionId: string) => `mcp:session:${sessionId}`;
 
+// In-memory store for local/CI
+const memorySessions = new Map<
+  string,
+  { record: SessionRecord; expiresAt: number; maxLifetimeExpiresAt: number }
+>();
+
 /** Creates a session that expires after the idle TTL (capped by max TTL). */
 export async function createSession(principal: string): Promise<string> {
   const sessionId = crypto.randomUUID();
   const record: SessionRecord = { principal, createdAt: Date.now() };
 
-  await redis().set(key(sessionId), record, {
+  const client = redis();
+
+  if (!client) {
+    // In-memory path (local/CI)
+    const idleExpiresAt =
+      Date.now() + getMcpSessionIdleTtlMs();
+    const maxLifetimeExpiresAt =
+      Date.now() + getMcpSessionMaxTtlMs();
+    memorySessions.set(sessionId, { 
+      record, 
+      expiresAt: idleExpiresAt,
+      maxLifetimeExpiresAt,
+    });
+    return sessionId;
+  }
+
+  // Production Redis path (Vercel only)
+  await client.set(key(sessionId), record, {
     px: Math.min(getMcpSessionIdleTtlMs(), getMcpSessionMaxTtlMs()),
   });
 
@@ -50,21 +89,52 @@ export async function touchSessionForPrincipal(
   sessionId: string,
   principal: string,
 ): Promise<boolean> {
-  const record = await redis().get<SessionRecord>(key(sessionId));
+  const client = redis();
+
+  if (!client) {
+    // In-memory path (local/CI)
+    const entry = memorySessions.get(sessionId);
+    if (!entry || entry.record.principal !== principal) {
+      return false;
+    }
+    
+    // Check if max lifetime has expired
+    if (Date.now() > entry.maxLifetimeExpiresAt) {
+      memorySessions.delete(sessionId);
+      logInfo("mcp_session_expired", { sessionId, reason: "maximum" });
+      return false;
+    }
+    
+    // Check if idle timeout has expired
+    if (Date.now() > entry.expiresAt) {
+      memorySessions.delete(sessionId);
+      logInfo("mcp_session_expired", { sessionId, reason: "idle" });
+      return false;
+    }
+    
+    // Slide idle window (but never past max lifetime)
+    const newIdleExpiresAt = Date.now() + getMcpSessionIdleTtlMs();
+    entry.expiresAt = Math.min(newIdleExpiresAt, entry.maxLifetimeExpiresAt);
+    return true;
+  }
+
+  // Production Redis path (Vercel only)
+  const record = await client.get<SessionRecord>(key(sessionId));
 
   if (!record || record.principal !== principal) {
     return false;
   }
 
-  const remainingMax = record.createdAt + getMcpSessionMaxTtlMs() - Date.now();
+  const remainingMax =
+    record.createdAt + getMcpSessionMaxTtlMs() - Date.now();
 
   if (remainingMax <= 0) {
-    await redis().del(key(sessionId));
+    await client.del(key(sessionId));
     logInfo("mcp_session_expired", { sessionId, reason: "maximum" });
     return false;
   }
 
-  await redis().pexpire(
+  await client.pexpire(
     key(sessionId),
     Math.min(getMcpSessionIdleTtlMs(), remainingMax),
   );
@@ -76,13 +146,26 @@ export async function deleteSessionForPrincipal(
   sessionId: string,
   principal: string,
 ): Promise<boolean> {
-  const record = await redis().get<SessionRecord>(key(sessionId));
+  const client = redis();
+
+  if (!client) {
+    // In-memory path (local/CI)
+    const entry = memorySessions.get(sessionId);
+    if (!entry || entry.record.principal !== principal) {
+      return false;
+    }
+    memorySessions.delete(sessionId);
+    return true;
+  }
+
+  // Production Redis path (Vercel only)
+  const record = await client.get<SessionRecord>(key(sessionId));
 
   if (!record || record.principal !== principal) {
     return false;
   }
 
-  return (await redis().del(key(sessionId))) > 0;
+  return (await client.del(key(sessionId))) > 0;
 }
 
 export function getSessionIdFromHeaders(
