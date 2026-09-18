@@ -70,9 +70,11 @@ export function getGithubPatForOwner(owner: string): {
 } {
   const key = `GITHUB_PAT_${owner.toUpperCase().replace(/-/g, "_")}`;
   const pat = process.env[key]?.trim();
+
   if (pat && pat.length > 0) {
     return { pat, key };
   }
+
   return { pat: getEnv().GITHUB_PAT, key: "GITHUB_PAT" };
 }
 
@@ -94,6 +96,6 @@ export function getPort(): number {
 export function getMcpSessionMaxTtlMs(): number {
   return getOptionalPositiveIntEnv(
     "MCP_SESSION_MAX_TTL_MS",
-    12 * 60 * 60 * 1000,
+    60 * 60 * 1000,
   );
 }

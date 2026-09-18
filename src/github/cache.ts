@@ -1,7 +1,6 @@
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
-  etag?: string;
   size: number;
 };
 
@@ -88,7 +87,12 @@ function cacheKey(
   body?: unknown,
   representation = "default",
 ): string {
-  return JSON.stringify([method, path, body ?? null, representation]);
+  return JSON.stringify([
+    method.toUpperCase(),
+    path,
+    body ?? null,
+    representation,
+  ]);
 }
 
 /**
@@ -202,7 +206,7 @@ export function getFromCache<T>(
  * @param path - The GitHub API path.
  * @param body - The request body, if present.
  * @param value - The value to cache.
- * @param options - Optional TTL, ETag, and response representation metadata.
+ * @param options - Optional TTL and response representation metadata.
  */
 export function setInCache<T>(
   method: string,
@@ -211,12 +215,10 @@ export function setInCache<T>(
   value: T,
   options?: {
     ttlMs?: number;
-    etag?: string;
     representation?: string;
   },
 ): void {
   const ttlMs = options?.ttlMs ?? getCacheTTL(path);
-  const etag = options?.etag;
   const representation = options?.representation ?? "default";
   const key = cacheKey(method, path, body, representation);
   const size = estimateSize(value);
@@ -228,7 +230,6 @@ export function setInCache<T>(
   cache.set(key, {
     value,
     expiresAt: Date.now() + ttlMs,
-    etag,
     size,
   });
 
@@ -265,41 +266,4 @@ export function invalidateCacheForPath(pathPattern: string): void {
   for (const key of keysToDelete) {
     cache.delete(key);
   }
-}
-
-/**
- * Gets statistics for currently valid cache entries.
- *
- * Expired entries are removed before statistics are returned.
- *
- * @returns The estimated cache size, valid entry count, and cache keys.
- */
-export function getCacheStats(): {
-  size: number;
-  entries: number;
-  keys: string[];
-} {
-  const now = Date.now();
-  const validKeys: string[] = [];
-
-  for (const [key, entry] of cache.entries()) {
-    if (now <= entry.expiresAt) {
-      validKeys.push(key);
-    } else {
-      cache.delete(key);
-    }
-  }
-
-  return {
-    size: getTotalCacheSize(),
-    entries: validKeys.length,
-    keys: validKeys,
-  };
-}
-
-/**
- * Removes every entry from the in-memory cache.
- */
-export function clearCache(): void {
-  cache.clear();
 }

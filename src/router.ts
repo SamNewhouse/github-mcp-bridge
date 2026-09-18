@@ -17,23 +17,22 @@ import {
 } from "./lib/http";
 import { createRequestLogger } from "./lib/logging";
 import {
+  deleteSessionForPrincipal,
   getOrCreateSessionForPrincipal,
   getSessionIdFromHeaders,
   touchSession,
   validateSession,
 } from "./lib/session";
-import { clearCache, getCacheStats } from "./github/cache";
 import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
 
 const RPC_UNAUTHORIZED = -32001;
+const RPC_SESSION_REQUIRED = -32002;
 const SUPPORTED_PROTOCOL_VERSION = "2025-03-26";
 
 const CACHED_TOOL_LIST = getToolList();
 const CACHED_TOOL_LIST_RESPONSE = { tools: CACHED_TOOL_LIST };
-
-const ADMIN_TOOLS = new Set(["admin/cache/stats", "admin/cache/clear"]);
 
 const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -101,42 +100,6 @@ function toMcpToolResult(result: unknown): McpToolResult {
 }
 
 /**
- * Executes an internal administrative cache tool.
- *
- * @param toolName - The administrative tool name.
- * @param principal - The authenticated request principal.
- * @returns The administrative tool result.
- * @throws {Error} When the administrative tool name is unknown.
- */
-async function handleAdminTool(
-  toolName: string,
-  principal: string,
-): Promise<unknown> {
-  switch (toolName) {
-    case "admin/cache/stats": {
-      const stats = getCacheStats();
-
-      return {
-        ...stats,
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    case "admin/cache/clear":
-      clearCache();
-
-      return {
-        ok: true,
-        message: "Cache cleared successfully",
-        timestamp: new Date().toISOString(),
-      };
-
-    default:
-      throw new Error(`Unknown admin tool: ${toolName}`);
-  }
-}
-
-/**
  * Sends the public splash page response.
  *
  * @param res - The HTTP response to populate.
@@ -159,9 +122,6 @@ function sendSplashPage(res: http.ServerResponse): void {
 /**
  * Resolves the MCP protocol version supported by this server.
  *
- * The parameter is currently ignored because this server exposes a single
- * supported protocol version.
- *
  * @param _params - Client-supplied initialization parameters.
  * @returns The supported MCP protocol version.
  */
@@ -170,16 +130,16 @@ function resolveProtocolVersion(_params: unknown): string {
 }
 
 /**
- * Resolves or creates a session for an authenticated principal.
- *
- * A valid session ID supplied by the client is reused. Otherwise, a session
- * associated with the principal is created or resumed automatically.
+ * Resolves or creates a session for the initialize request.
  *
  * @param principal - The authenticated request principal.
  * @param headers - The incoming request headers.
- * @returns Session information used by the MCP request handler.
+ * @returns Session information used during initialization.
  */
-function resolveSession(principal: string, headers: http.IncomingHttpHeaders) {
+function resolveInitialSession(
+  principal: string,
+  headers: http.IncomingHttpHeaders,
+) {
   const requestedSessionId = getSessionIdFromHeaders(headers);
   const hasValidRequestedSession =
     requestedSessionId !== null &&
@@ -200,11 +160,29 @@ function resolveSession(principal: string, headers: http.IncomingHttpHeaders) {
 }
 
 /**
- * Handles an incoming MCP HTTP request.
+ * Requires a valid session ID for post-initialization MCP requests.
  *
- * This function handles health checks, the public splash page, JSON-RPC
- * validation, MCP session resolution, tool discovery, administrative cache
- * tools, and normal tool execution.
+ * @param principal - The authenticated request principal.
+ * @param headers - The incoming request headers.
+ * @returns The validated session ID.
+ * @throws When the request does not contain a valid session.
+ */
+function requireSession(
+  principal: string,
+  headers: http.IncomingHttpHeaders,
+): string | null {
+  const sessionId = getSessionIdFromHeaders(headers);
+
+  if (!sessionId || !validateSession(sessionId, principal)) {
+    return null;
+  }
+
+  touchSession(sessionId);
+  return sessionId;
+}
+
+/**
+ * Handles an incoming MCP HTTP request.
  *
  * @param req - The incoming HTTP request.
  * @param res - The outgoing HTTP response.
@@ -300,6 +278,38 @@ export async function handleMcpRequest(
       return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Unauthorized");
     }
 
+    if (req.method === "DELETE") {
+      const sessionId = getSessionIdFromHeaders(req.headers);
+
+      if (!sessionId) {
+        log.warn("session_delete_rejected", {
+          reason: "missing_session_id",
+        });
+
+        return sendJson(res, 400, { error: "Missing MCP session ID" });
+      }
+
+      const deleted = deleteSessionForPrincipal(sessionId, principal);
+
+      if (!deleted) {
+        log.warn("session_delete_rejected", {
+          reason: "invalid_or_expired_session",
+          sessionId,
+        });
+
+        return sendJson(res, 404, { error: "Session not found" });
+      }
+
+      log.info("mcp_session_deleted", {
+        sessionId,
+      });
+
+      res.statusCode = 204;
+      res.setHeader("mcp-session-id", sessionId);
+      res.end();
+      return;
+    }
+
     if (req.method !== "POST") {
       log.warn("request_rejected", {
         path: url.pathname,
@@ -329,9 +339,9 @@ export async function handleMcpRequest(
     }
 
     const body = parsed.data;
-    const session = resolveSession(principal, req.headers);
 
     if (body.method === "initialize") {
+      const session = resolveInitialSession(principal, req.headers);
       const protocolVersion = resolveProtocolVersion(body.params);
 
       const logData = {
@@ -361,18 +371,38 @@ export async function handleMcpRequest(
       );
     }
 
+    const sessionId = requireSession(principal, req.headers);
+
+    if (!sessionId) {
+      log.warn("mcp_session_required", {
+        id: body.id ?? null,
+        method: body.method,
+      });
+
+      return sendJsonRpcError(
+        res,
+        body.id ?? null,
+        RPC_SESSION_REQUIRED,
+        "MCP session required",
+        {
+          message:
+            "Call initialize first and include the returned Mcp-Session-Id header.",
+        },
+      );
+    }
+
     if (body.method === "ping") {
       return sendJsonRpcResultWithSession(
         res,
         body.id ?? null,
         {},
-        session.sessionId,
+        sessionId,
       );
     }
 
     if (body.method === "notifications/initialized") {
       res.statusCode = 202;
-      res.setHeader("mcp-session-id", session.sessionId);
+      res.setHeader("mcp-session-id", sessionId);
       res.end();
       return;
     }
@@ -380,10 +410,9 @@ export async function handleMcpRequest(
     if (body.method === "tools/list") {
       log.info("tools_list_requested", {
         id: body.id ?? null,
-        sessionId: session.sessionId,
-        requestedSessionId: session.requestedSessionId,
-        clientSuppliedValidSession: session.hasValidRequestedSession,
-        autoResumed: session.autoResumed,
+        sessionId,
+        clientSuppliedValidSession: true,
+        autoResumed: false,
         toolCount: CACHED_TOOL_LIST.length,
         toolNames: CACHED_TOOL_LIST.map((tool) => tool.name),
       });
@@ -392,7 +421,7 @@ export async function handleMcpRequest(
         res,
         body.id ?? null,
         CACHED_TOOL_LIST_RESPONSE,
-        session.sessionId,
+        sessionId,
       );
     }
 
@@ -404,7 +433,7 @@ export async function handleMcpRequest(
           id: body.id ?? null,
           method: body.method,
           issues: params.error.issues,
-          sessionId: session.sessionId,
+          sessionId,
         });
 
         return sendJsonRpcError(
@@ -420,36 +449,6 @@ export async function handleMcpRequest(
       const toolName = params.data.name;
       const toolArgs = params.data.arguments;
 
-      if (ADMIN_TOOLS.has(toolName)) {
-        try {
-          const result = await handleAdminTool(toolName, principal);
-          const mcpResult = toMcpToolResult(result);
-
-          return sendJsonRpcResultWithSession(
-            res,
-            body.id ?? null,
-            mcpResult,
-            session.sessionId,
-          );
-        } catch (error) {
-          log.error("admin_tool_failed", {
-            tool: toolName,
-            error: error instanceof Error ? error.message : String(error),
-          });
-
-          return sendJsonRpcError(
-            res,
-            body.id ?? null,
-            -32603,
-            "Internal error",
-            {
-              tool: toolName,
-              message: error instanceof Error ? error.message : String(error),
-            },
-          );
-        }
-      }
-
       try {
         const result = await executeTool(toolName, toolArgs);
         const mcpResult = toMcpToolResult(result);
@@ -458,7 +457,7 @@ export async function handleMcpRequest(
           res,
           body.id ?? null,
           mcpResult,
-          session.sessionId,
+          sessionId,
         );
       } catch (error) {
         const status = getErrorStatus(error);
@@ -469,7 +468,7 @@ export async function handleMcpRequest(
           tool: toolName,
           status,
           message,
-          sessionId: session.sessionId,
+          sessionId,
           errorName: error instanceof Error ? error.name : "UnknownError",
         });
 
@@ -507,7 +506,7 @@ export async function handleMcpRequest(
     log.warn("jsonrpc_method_not_found", {
       id: body.id ?? null,
       method: body.method,
-      sessionId: session.sessionId,
+      sessionId,
     });
 
     return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
