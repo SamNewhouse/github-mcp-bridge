@@ -17,12 +17,12 @@ import {
 } from "./lib/http";
 import { createRequestLogger } from "./lib/logging";
 import {
+  deleteSessionForPrincipal,
   getOrCreateSessionForPrincipal,
   getSessionIdFromHeaders,
   touchSession,
   validateSession,
 } from "./lib/session";
-import { clearCache, getCacheStats } from "./github/cache";
 import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
@@ -32,8 +32,6 @@ const SUPPORTED_PROTOCOL_VERSION = "2025-03-26";
 
 const CACHED_TOOL_LIST = getToolList();
 const CACHED_TOOL_LIST_RESPONSE = { tools: CACHED_TOOL_LIST };
-
-const ADMIN_TOOLS = new Set(["admin/cache/stats", "admin/cache/clear"]);
 
 const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -98,42 +96,6 @@ function toMcpToolResult(result: unknown): McpToolResult {
     ],
     structuredContent: result,
   };
-}
-
-/**
- * Executes an internal administrative cache tool.
- *
- * @param toolName - The administrative tool name.
- * @param principal - The authenticated request principal.
- * @returns The administrative tool result.
- * @throws {Error} When the administrative tool name is unknown.
- */
-async function handleAdminTool(
-  toolName: string,
-  principal: string,
-): Promise<unknown> {
-  switch (toolName) {
-    case "admin/cache/stats": {
-      const stats = getCacheStats();
-
-      return {
-        ...stats,
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    case "admin/cache/clear":
-      clearCache();
-
-      return {
-        ok: true,
-        message: "Cache cleared successfully",
-        timestamp: new Date().toISOString(),
-      };
-
-    default:
-      throw new Error(`Unknown admin tool: ${toolName}`);
-  }
 }
 
 /**
@@ -203,8 +165,8 @@ function resolveSession(principal: string, headers: http.IncomingHttpHeaders) {
  * Handles an incoming MCP HTTP request.
  *
  * This function handles health checks, the public splash page, JSON-RPC
- * validation, MCP session resolution, tool discovery, administrative cache
- * tools, and normal tool execution.
+ * validation, MCP session resolution, tool discovery, and normal tool
+ * execution.
  *
  * @param req - The incoming HTTP request.
  * @param res - The outgoing HTTP response.
@@ -298,6 +260,38 @@ export async function handleMcpRequest(
     } catch {
       recordAuthFailure(clientIp);
       return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (req.method === "DELETE") {
+      const sessionId = getSessionIdFromHeaders(req.headers);
+
+      if (!sessionId) {
+        log.warn("session_delete_rejected", {
+          reason: "missing_session_id",
+        });
+
+        return sendJson(res, 400, { error: "Missing MCP session ID" });
+      }
+
+      const deleted = deleteSessionForPrincipal(sessionId, principal);
+
+      if (!deleted) {
+        log.warn("session_delete_rejected", {
+          reason: "invalid_or_expired_session",
+          sessionId,
+        });
+
+        return sendJson(res, 404, { error: "Session not found" });
+      }
+
+      log.info("mcp_session_deleted", {
+        sessionId,
+      });
+
+      res.statusCode = 204;
+      res.setHeader("mcp-session-id", sessionId);
+      res.end();
+      return;
     }
 
     if (req.method !== "POST") {
@@ -419,36 +413,6 @@ export async function handleMcpRequest(
 
       const toolName = params.data.name;
       const toolArgs = params.data.arguments;
-
-      if (ADMIN_TOOLS.has(toolName)) {
-        try {
-          const result = await handleAdminTool(toolName, principal);
-          const mcpResult = toMcpToolResult(result);
-
-          return sendJsonRpcResultWithSession(
-            res,
-            body.id ?? null,
-            mcpResult,
-            session.sessionId,
-          );
-        } catch (error) {
-          log.error("admin_tool_failed", {
-            tool: toolName,
-            error: error instanceof Error ? error.message : String(error),
-          });
-
-          return sendJsonRpcError(
-            res,
-            body.id ?? null,
-            -32603,
-            "Internal error",
-            {
-              tool: toolName,
-              message: error instanceof Error ? error.message : String(error),
-            },
-          );
-        }
-      }
 
       try {
         const result = await executeTool(toolName, toolArgs);

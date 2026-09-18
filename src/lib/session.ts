@@ -28,6 +28,7 @@ function deleteSession(sessionId: string): void {
 
   sessions.delete(sessionId);
   const current = principalToSessionId.get(session.principal);
+
   if (current === sessionId) {
     principalToSessionId.delete(session.principal);
   }
@@ -47,8 +48,10 @@ export function createSession(principal: string): string {
   pruneExpiredSessions();
 
   const existingSessionId = principalToSessionId.get(principal);
+
   if (existingSessionId) {
     const existing = sessions.get(existingSessionId);
+
     if (existing && !isExpired(existing, now())) {
       touchSession(existingSessionId);
       return existingSessionId;
@@ -65,6 +68,7 @@ export function createSession(principal: string): string {
     createdAt: timestamp,
     lastSeenAt: timestamp,
   });
+
   principalToSessionId.set(principal, sessionId);
 
   return sessionId;
@@ -74,11 +78,13 @@ export function getOrCreateSessionForPrincipal(principal: string): string {
   pruneExpiredSessions();
 
   const existingSessionId = principalToSessionId.get(principal);
+
   if (!existingSessionId) {
     return createSession(principal);
   }
 
   const existing = sessions.get(existingSessionId);
+
   if (!existing || isExpired(existing, now())) {
     deleteSession(existingSessionId);
     return createSession(principal);
@@ -95,10 +101,12 @@ export function validateSession(
   pruneExpiredSessions();
 
   const session = sessions.get(sessionId);
+
   if (!session || isExpired(session, now())) {
     if (session) {
       deleteSession(sessionId);
     }
+
     return false;
   }
 
@@ -113,10 +121,12 @@ export function touchSession(sessionId: string): boolean {
   pruneExpiredSessions();
 
   const session = sessions.get(sessionId);
+
   if (!session || isExpired(session, now())) {
     if (session) {
       deleteSession(sessionId);
     }
+
     return false;
   }
 
@@ -125,6 +135,22 @@ export function touchSession(sessionId: string): boolean {
     lastSeenAt: now(),
   });
 
+  return true;
+}
+
+export function deleteSessionForPrincipal(
+  sessionId: string,
+  principal: string,
+): boolean {
+  pruneExpiredSessions();
+
+  const session = sessions.get(sessionId);
+
+  if (!session || session.principal !== principal) {
+    return false;
+  }
+
+  deleteSession(sessionId);
   return true;
 }
 

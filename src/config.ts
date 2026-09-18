@@ -91,6 +91,13 @@ export function getPort(): number {
   return getEnv().PORT;
 }
 
+export function getMcpSessionIdleTtlMs(): number {
+  return getOptionalPositiveIntEnv(
+    "MCP_SESSION_IDLE_TTL_MS",
+    2 * 60 * 60 * 1000,
+  );
+}
+
 export function getMcpSessionMaxTtlMs(): number {
   return getOptionalPositiveIntEnv(
     "MCP_SESSION_MAX_TTL_MS",
