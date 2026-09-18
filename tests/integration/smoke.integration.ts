@@ -13,7 +13,9 @@ describe("smoke", () => {
     resetSession();
   });
 
-  test("tools/list succeeds without explicit initialize", async () => {
+  test("tools/list succeeds after initialize", async () => {
+    const sessionId = await initializeSession();
+
     const res = await postSessionJsonRpc({
       jsonrpc: "2.0",
       id: 1,
@@ -21,30 +23,23 @@ describe("smoke", () => {
     });
 
     const json = await res.json();
+
     expect(json.error).toBeUndefined();
     expect(Array.isArray(json.result.tools)).toBe(true);
     expect(json.result.tools.length).toBeGreaterThan(0);
-    expect(res.headers.get("mcp-session-id")).toBeTruthy();
+    expect(res.headers.get("mcp-session-id")).toBe(sessionId);
   });
 
-  test("initialize still succeeds for compatibility", async () => {
+  test("initialize succeeds and provides a session", async () => {
     const sessionId = await initializeSession();
+
     expect(typeof sessionId).toBe("string");
     expect(sessionId.length).toBeGreaterThan(0);
-
-    const res = await postSessionJsonRpc({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/list",
-    });
-
-    const json = await res.json();
-    expect(json.error).toBeUndefined();
-    expect(Array.isArray(json.result.tools)).toBe(true);
   });
 
-  test("list_repositories succeeds without explicit initialize", async () => {
+  test("list_repositories succeeds after initialize", async () => {
     const result = await callTool("list_repositories", {});
+
     expect(Array.isArray(result.repositories)).toBe(true);
     expect(result.repositories.length).toBeGreaterThan(0);
   });
