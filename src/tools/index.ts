@@ -85,6 +85,11 @@ export type ToolName = keyof typeof toolDefinitions;
 
 let cachedToolList: ReturnType<typeof getToolListInner> | null = null;
 
+/**
+ * Builds the public tool metadata list from the registered tool definitions.
+ *
+ * @returns Tool names, descriptions, and input schemas.
+ */
 function getToolListInner() {
   return tools.map((tool) => ({
     name: tool.name,
@@ -93,18 +98,36 @@ function getToolListInner() {
   }));
 }
 
+/**
+ * Returns the cached public tool metadata list.
+ *
+ * The list is generated once because the registered tools do not change at
+ * runtime.
+ *
+ * @returns The tool metadata exposed through MCP `tools/list`.
+ */
 export function getToolList() {
   if (!cachedToolList) {
     cachedToolList = getToolListInner();
   }
+
   return cachedToolList;
 }
 
+/**
+ * Executes a registered tool after validating that its name exists.
+ *
+ * @param name - The registered tool name.
+ * @param input - The raw tool arguments.
+ * @returns The result produced by the tool.
+ * @throws {AppError} When the tool name is not registered.
+ */
 export async function executeTool(name: string, input: unknown) {
   if (!Object.hasOwn(toolDefinitions, name)) {
     throw new AppError("Unknown or missing tool", 400);
   }
 
   const tool = toolDefinitions[name as ToolName];
+
   return tool.run(input);
 }

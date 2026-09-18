@@ -14,6 +14,14 @@ type GithubRequestOptions = RequestInit & {
   owner?: string;
 };
 
+/**
+ * Maps a GitHub HTTP status and response body to an application error.
+ *
+ * @param status - The HTTP status returned by GitHub.
+ * @param body - The response body returned by GitHub.
+ * @param patKey - The environment variable name used for authentication.
+ * @returns The corresponding application error.
+ */
 function mapGithubStatus(
   status: number,
   body: string,
@@ -59,6 +67,17 @@ function mapGithubStatus(
   }
 }
 
+/**
+ * Creates the cache representation identifier for a request.
+ *
+ * The identifier distinguishes response formats and media types so that,
+ * for example, a JSON pull-request response cannot be returned for a
+ * unified-diff request using the same endpoint.
+ *
+ * @param headers - The request headers.
+ * @param responseType - The expected response type.
+ * @returns A representation identifier suitable for cache keys and logs.
+ */
 function getCacheRepresentation(
   headers: Headers,
   responseType: "json" | "text",
@@ -66,6 +85,20 @@ function getCacheRepresentation(
   return `${responseType}:${headers.get("Accept") ?? "default"}`;
 }
 
+/**
+ * Sends a request to the GitHub API.
+ *
+ * GET responses are cached using the request method, path, body, and response
+ * representation. Successful mutations invalidate cached entries associated
+ * with the affected repository.
+ *
+ * @typeParam T - The expected response type.
+ * @param path - The GitHub API path.
+ * @param init - Optional request, authentication-owner, and response options.
+ * @returns A promise resolving to the decoded GitHub response.
+ * @throws {AppError} When GitHub returns a mapped API error or the response
+ * exceeds the configured size limit.
+ */
 export async function githubRequest<T>(
   path: string,
   init: GithubRequestOptions = {},

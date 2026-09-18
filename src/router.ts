@@ -22,7 +22,7 @@ import {
   touchSession,
   validateSession,
 } from "./lib/session";
-import { getCacheStats, clearCache } from "./github/cache";
+import { clearCache, getCacheStats } from "./github/cache";
 import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import type { McpToolResult } from "./tools/shared";
@@ -30,11 +30,9 @@ import type { McpToolResult } from "./tools/shared";
 const RPC_UNAUTHORIZED = -32001;
 const SUPPORTED_PROTOCOL_VERSION = "2025-03-26";
 
-// Cache the tool list at module level - never changes at runtime
 const CACHED_TOOL_LIST = getToolList();
 const CACHED_TOOL_LIST_RESPONSE = { tools: CACHED_TOOL_LIST };
 
-// Add admin tools for cache management
 const ADMIN_TOOLS = new Set(["admin/cache/stats", "admin/cache/clear"]);
 
 const jsonRpcRequestSchema = z.object({
@@ -49,12 +47,19 @@ const toolCallParamsSchema = z.object({
   arguments: z.record(z.string(), z.unknown()).default({}),
 });
 
+/**
+ * Determines whether a value already has the MCP tool-result shape.
+ *
+ * @param value - The value to inspect.
+ * @returns `true` when the value contains only valid text content items.
+ */
 function isMcpToolResult(value: unknown): value is McpToolResult {
   if (!value || typeof value !== "object") {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
+
   if (!Array.isArray(candidate.content)) {
     return false;
   }
@@ -65,10 +70,20 @@ function isMcpToolResult(value: unknown): value is McpToolResult {
     }
 
     const contentItem = item as Record<string, unknown>;
+
     return contentItem.type === "text" && typeof contentItem.text === "string";
   });
 }
 
+/**
+ * Converts a tool result into the MCP tool-result format.
+ *
+ * Existing MCP results are returned unchanged. Other values are represented
+ * as formatted JSON text and exposed through `structuredContent`.
+ *
+ * @param result - The raw tool result.
+ * @returns A normalized MCP tool result.
+ */
 function toMcpToolResult(result: unknown): McpToolResult {
   if (isMcpToolResult(result)) {
     return result;
@@ -85,7 +100,14 @@ function toMcpToolResult(result: unknown): McpToolResult {
   };
 }
 
-// Handle admin cache management tools
+/**
+ * Executes an internal administrative cache tool.
+ *
+ * @param toolName - The administrative tool name.
+ * @param principal - The authenticated request principal.
+ * @returns The administrative tool result.
+ * @throws {Error} When the administrative tool name is unknown.
+ */
 async function handleAdminTool(
   toolName: string,
   principal: string,
@@ -93,28 +115,35 @@ async function handleAdminTool(
   switch (toolName) {
     case "admin/cache/stats": {
       const stats = getCacheStats();
+
       return {
         ...stats,
         timestamp: new Date().toISOString(),
       };
     }
 
-    case "admin/cache/clear": {
+    case "admin/cache/clear":
       clearCache();
+
       return {
         ok: true,
         message: "Cache cleared successfully",
         timestamp: new Date().toISOString(),
       };
-    }
 
     default:
       throw new Error(`Unknown admin tool: ${toolName}`);
   }
 }
 
+/**
+ * Sends the public splash page response.
+ *
+ * @param res - The HTTP response to populate.
+ */
 function sendSplashPage(res: http.ServerResponse): void {
   const html = getSplashHtml(CACHED_TOOL_LIST.length);
+
   res.statusCode = 200;
   res.setHeader("content-type", "text/html; charset=utf-8");
   res.setHeader(
@@ -127,10 +156,29 @@ function sendSplashPage(res: http.ServerResponse): void {
   res.end(html);
 }
 
-function resolveProtocolVersion(_: unknown): string {
+/**
+ * Resolves the MCP protocol version supported by this server.
+ *
+ * The parameter is currently ignored because this server exposes a single
+ * supported protocol version.
+ *
+ * @param _params - Client-supplied initialization parameters.
+ * @returns The supported MCP protocol version.
+ */
+function resolveProtocolVersion(_params: unknown): string {
   return SUPPORTED_PROTOCOL_VERSION;
 }
 
+/**
+ * Resolves or creates a session for an authenticated principal.
+ *
+ * A valid session ID supplied by the client is reused. Otherwise, a session
+ * associated with the principal is created or resumed automatically.
+ *
+ * @param principal - The authenticated request principal.
+ * @param headers - The incoming request headers.
+ * @returns Session information used by the MCP request handler.
+ */
 function resolveSession(principal: string, headers: http.IncomingHttpHeaders) {
   const requestedSessionId = getSessionIdFromHeaders(headers);
   const hasValidRequestedSession =
@@ -151,6 +199,17 @@ function resolveSession(principal: string, headers: http.IncomingHttpHeaders) {
   };
 }
 
+/**
+ * Handles an incoming MCP HTTP request.
+ *
+ * This function handles health checks, the public splash page, JSON-RPC
+ * validation, MCP session resolution, tool discovery, administrative cache
+ * tools, and normal tool execution.
+ *
+ * @param req - The incoming HTTP request.
+ * @param res - The outgoing HTTP response.
+ * @returns A promise that resolves when the response has been sent.
+ */
 export async function handleMcpRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -201,6 +260,7 @@ export async function handleMcpRequest(
         method: req.method ?? null,
         reason: "method_not_allowed",
       });
+
       return sendJson(res, 405, { error: "Method not allowed" });
     }
 
@@ -209,6 +269,7 @@ export async function handleMcpRequest(
         path: url.pathname,
         reason: "not_found",
       });
+
       return sendJson(res, 404, { error: "Not found" });
     }
 
@@ -220,6 +281,7 @@ export async function handleMcpRequest(
         url: req.url ?? null,
         ip: clientIp,
       });
+
       return sendJsonRpcError(
         res,
         null,
@@ -244,6 +306,7 @@ export async function handleMcpRequest(
         method: req.method ?? null,
         reason: "method_not_allowed",
       });
+
       return sendJson(res, 405, { error: "Method not allowed" });
     }
 
@@ -254,6 +317,7 @@ export async function handleMcpRequest(
       log.warn("jsonrpc_invalid_request", {
         issues: parsed.error.issues,
       });
+
       return sendJsonRpcError(
         res,
         null,
@@ -342,6 +406,7 @@ export async function handleMcpRequest(
           issues: params.error.issues,
           sessionId: session.sessionId,
         });
+
         return sendJsonRpcError(
           res,
           body.id ?? null,
@@ -355,7 +420,6 @@ export async function handleMcpRequest(
       const toolName = params.data.name;
       const toolArgs = params.data.arguments;
 
-      // Handle admin tools
       if (ADMIN_TOOLS.has(toolName)) {
         try {
           const result = await handleAdminTool(toolName, principal);
@@ -445,6 +509,7 @@ export async function handleMcpRequest(
       method: body.method,
       sessionId: session.sessionId,
     });
+
     return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
   } catch (error) {
     const status = getErrorStatus(error);

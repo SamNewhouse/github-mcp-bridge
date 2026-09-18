@@ -53,6 +53,15 @@ const CACHE_CONFIGS: CacheConfig[] = [
   },
 ];
 
+/**
+ * Estimates the memory size of a cache value in bytes.
+ *
+ * JSON serialization is used as a lightweight approximation. The result
+ * assumes two bytes per serialized character.
+ *
+ * @param value - The value whose approximate size should be calculated.
+ * @returns The estimated size in bytes.
+ */
 function estimateSize(value: unknown): number {
   try {
     return JSON.stringify(value).length * 2;
@@ -61,6 +70,18 @@ function estimateSize(value: unknown): number {
   }
 }
 
+/**
+ * Creates a stable key for a cache entry.
+ *
+ * The representation is included so that requests for the same endpoint
+ * can cache different response formats, such as JSON and unified diff text.
+ *
+ * @param method - The HTTP method.
+ * @param path - The GitHub API path.
+ * @param body - The request body, if present.
+ * @param representation - The response representation.
+ * @returns The serialized cache key.
+ */
 function cacheKey(
   method: string,
   path: string,
@@ -70,6 +91,11 @@ function cacheKey(
   return JSON.stringify([method, path, body ?? null, representation]);
 }
 
+/**
+ * Removes the oldest cache entry.
+ *
+ * Map insertion order is used as a simple FIFO eviction strategy.
+ */
 function evictOldest(): void {
   if (cache.size === 0) {
     return;
@@ -82,6 +108,11 @@ function evictOldest(): void {
   }
 }
 
+/**
+ * Calculates the estimated total size of all cache entries.
+ *
+ * @returns The estimated cache size in bytes.
+ */
 function getTotalCacheSize(): number {
   let totalSize = 0;
 
@@ -92,6 +123,9 @@ function getTotalCacheSize(): number {
   return totalSize;
 }
 
+/**
+ * Evicts the oldest entries until both cache limits are satisfied.
+ */
 function evictUntilUnderLimit(): void {
   while (
     cache.size > MAX_CACHE_ENTRIES ||
@@ -105,6 +139,15 @@ function evictUntilUnderLimit(): void {
   }
 }
 
+/**
+ * Gets the cache TTL configured for a GitHub API path.
+ *
+ * The query string and one trailing slash are ignored when matching
+ * configured endpoint patterns.
+ *
+ * @param path - The GitHub API path.
+ * @returns The TTL in milliseconds.
+ */
 export function getCacheTTL(path: string): number {
   const normalizedPath = path.split("?")[0].replace(/\/$/, "");
 
@@ -117,6 +160,16 @@ export function getCacheTTL(path: string): number {
   return DEFAULT_TTL_MS;
 }
 
+/**
+ * Retrieves a non-expired value from the cache.
+ *
+ * @typeParam T - The expected cached value type.
+ * @param method - The HTTP method.
+ * @param path - The GitHub API path.
+ * @param body - The request body, if present.
+ * @param representation - The response representation.
+ * @returns The cached value, or `null` when no valid entry exists.
+ */
 export function getFromCache<T>(
   method: string,
   path: string,
@@ -138,6 +191,19 @@ export function getFromCache<T>(
   return entry.value as T;
 }
 
+/**
+ * Stores a value in the cache.
+ *
+ * Existing entries with the same key are replaced and moved to the newest
+ * position before eviction limits are applied.
+ *
+ * @typeParam T - The value type being cached.
+ * @param method - The HTTP method.
+ * @param path - The GitHub API path.
+ * @param body - The request body, if present.
+ * @param value - The value to cache.
+ * @param options - Optional TTL, ETag, and response representation metadata.
+ */
 export function setInCache<T>(
   method: string,
   path: string,
@@ -169,6 +235,14 @@ export function setInCache<T>(
   evictUntilUnderLimit();
 }
 
+/**
+ * Invalidates cached entries associated with a path.
+ *
+ * Entries are removed when their path starts with `pathPattern` or belongs
+ * to the same repository prefix as the mutated path.
+ *
+ * @param pathPattern - The path or path prefix that changed.
+ */
 export function invalidateCacheForPath(pathPattern: string): void {
   const keysToDelete: string[] = [];
   const pathPrefix = pathPattern.split("/").slice(0, 3).join("/");
@@ -193,6 +267,13 @@ export function invalidateCacheForPath(pathPattern: string): void {
   }
 }
 
+/**
+ * Gets statistics for currently valid cache entries.
+ *
+ * Expired entries are removed before statistics are returned.
+ *
+ * @returns The estimated cache size, valid entry count, and cache keys.
+ */
 export function getCacheStats(): {
   size: number;
   entries: number;
@@ -216,6 +297,9 @@ export function getCacheStats(): {
   };
 }
 
+/**
+ * Removes every entry from the in-memory cache.
+ */
 export function clearCache(): void {
   cache.clear();
 }
