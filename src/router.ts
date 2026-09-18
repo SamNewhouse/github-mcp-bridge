@@ -234,14 +234,21 @@ export async function handleMcpRequest(
     if (body.method === "initialize") {
       const protocolVersion = resolveProtocolVersion(body.params);
 
-      log.info("mcp_session_initialized", {
+      const logData = {
         id: body.id ?? null,
         sessionId: session.sessionId,
         protocolVersion,
         resumed: !session.autoResumed,
         requestedSessionId: session.requestedSessionId,
         autoResumed: session.autoResumed,
-      });
+      };
+
+      if (session.autoResumed) {
+        // Existing session reused; client just didn't send the header.
+        (log as any).debug?.("mcp_session_auto_resumed", logData);
+      } else {
+        log.info("mcp_session_initialized", logData);
+      }
 
       return sendJsonRpcResultWithSession(
         res,

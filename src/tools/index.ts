@@ -83,12 +83,21 @@ export const toolDefinitions = Object.fromEntries(
 
 export type ToolName = keyof typeof toolDefinitions;
 
-export function getToolList() {
+let cachedToolList: ReturnType<typeof getToolListInner> | null = null;
+
+function getToolListInner() {
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
   }));
+}
+
+export function getToolList() {
+  if (!cachedToolList) {
+    cachedToolList = getToolListInner();
+  }
+  return cachedToolList;
 }
 
 export async function executeTool(name: string, input: unknown) {

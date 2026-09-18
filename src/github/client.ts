@@ -1,6 +1,7 @@
 import { getGithubPatForOwner } from "../config";
 import { AppError } from "../lib/errors";
 import { logError, logWarn } from "../lib/logging";
+import { setInCache } from "./cache";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -134,11 +135,21 @@ export async function githubRequest<T>(
       throw new AppError("GitHub response too large", 413);
     }
 
+    let result: T;
+
     if (responseType === "text") {
-      return (await response.text()) as T;
+      result = (await response.text()) as T;
+    } else {
+      result = (await response.json()) as T;
     }
 
-    return (await response.json()) as T;
+    // Cache successful GET responses only
+    if (method === "GET") {
+      const bodyForCache = init.body ? JSON.parse(init.body as string) : undefined;
+      setInCache(method, path, bodyForCache, result);
+    }
+
+    return result;
   } catch (error) {
     clearTimeout(timeoutId);
     const durationMs = Date.now() - startedAt;
