@@ -203,10 +203,7 @@ test("different principals receive different sessions", async () => {
     "different principals should not share the same session",
   );
 
-  assert.equal(
-    await touchSessionForPrincipal(sessionA, TEST_PRINCIPAL),
-    true,
-  );
+  assert.equal(await touchSessionForPrincipal(sessionA, TEST_PRINCIPAL), true);
   assert.equal(
     await touchSessionForPrincipal(sessionB, ALT_TEST_PRINCIPAL),
     true,
@@ -215,10 +212,7 @@ test("different principals receive different sessions", async () => {
     await touchSessionForPrincipal(sessionA, ALT_TEST_PRINCIPAL),
     false,
   );
-  assert.equal(
-    await touchSessionForPrincipal(sessionB, TEST_PRINCIPAL),
-    false,
-  );
+  assert.equal(await touchSessionForPrincipal(sessionB, TEST_PRINCIPAL), false);
 
   logPass("session_isolation", { sessionA, sessionB });
 });
@@ -241,7 +235,10 @@ test("a deleted session is no longer valid", async () => {
     "another principal must not be able to delete the session",
   );
 
-  assert.equal(await deleteSessionForPrincipal(sessionId, TEST_PRINCIPAL), true);
+  assert.equal(
+    await deleteSessionForPrincipal(sessionId, TEST_PRINCIPAL),
+    true,
+  );
 
   assert.equal(
     await touchSessionForPrincipal(sessionId, TEST_PRINCIPAL),

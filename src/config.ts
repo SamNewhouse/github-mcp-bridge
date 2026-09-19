@@ -3,7 +3,9 @@ import { parseEnv } from "./lib/env";
 import { logWarn } from "./lib/logging";
 
 const envSchema = z.object({
+  // Default PAT used when no owner-specific PAT is configured.
   GITHUB_PAT: z.string().trim().min(1, "GITHUB_PAT is required"),
+
   CONNECTOR_SECRET: z
     .string()
     .trim()
@@ -11,6 +13,7 @@ const envSchema = z.object({
       32,
       "CONNECTOR_SECRET must be at least 32 characters — generate one with: openssl rand -hex 32",
     ),
+
   PORT: z.coerce.number().int().positive().default(3000),
 });
 
@@ -23,7 +26,10 @@ function getEnv(): Env {
     return cachedEnv;
   }
 
-  cachedEnv = parseEnv(envSchema, { label: "application environment" });
+  cachedEnv = parseEnv(envSchema, {
+    label: "application environment",
+  });
+
   return cachedEnv;
 }
 
@@ -56,7 +62,7 @@ export function getGithubPat(): string {
 
 export function validateGithubPats(): void {
   for (const [key, val] of Object.entries(process.env)) {
-    if (key.startsWith("GITHUB_PAT_") && (!val || val.trim().length === 0)) {
+    if (key.startsWith("GITHUB_PAT_") && (!val || val.trim() === "")) {
       logWarn("github_pat_empty", {
         key,
         message: `${key} is set but empty — requests for this owner will fall back to GITHUB_PAT`,
@@ -69,14 +75,22 @@ export function getGithubPatForOwner(owner: string): {
   pat: string;
   key: string;
 } {
-  const key = `GITHUB_PAT_${owner.toUpperCase().replace(/-/g, "_")}`;
-  const pat = process.env[key]?.trim();
+  const ownerKey = owner.trim().toUpperCase().replace(/-/g, "_");
 
-  if (pat && pat.length > 0) {
-    return { pat, key };
+  const ownerPatKey = `GITHUB_PAT_${ownerKey}`;
+  const ownerPat = process.env[ownerPatKey]?.trim();
+
+  if (ownerPat) {
+    return {
+      pat: ownerPat,
+      key: ownerPatKey,
+    };
   }
 
-  return { pat: getEnv().GITHUB_PAT, key: "GITHUB_PAT" };
+  return {
+    pat: getEnv().GITHUB_PAT,
+    key: "GITHUB_PAT",
+  };
 }
 
 export function getConnectorSecret(): string {
@@ -86,8 +100,8 @@ export function getConnectorSecret(): string {
 export function getConnectorSecrets(): string[] {
   return getEnv()
     .CONNECTOR_SECRET.split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+    .map((secret) => secret.trim())
+    .filter((secret) => secret.length > 0);
 }
 
 export function getPort(): number {
@@ -95,15 +109,9 @@ export function getPort(): number {
 }
 
 export function getMcpSessionIdleTtlMs(): number {
-  return getOptionalPositiveIntEnv(
-    "MCP_SESSION_IDLE_TTL_MS",
-    5 * 60 * 1000,
-  );
+  return getOptionalPositiveIntEnv("MCP_SESSION_IDLE_TTL_MS", 5 * 60 * 1000);
 }
 
 export function getMcpSessionMaxTtlMs(): number {
-  return getOptionalPositiveIntEnv(
-    "MCP_SESSION_MAX_TTL_MS",
-    60 * 60 * 1000,
-  );
+  return getOptionalPositiveIntEnv("MCP_SESSION_MAX_TTL_MS", 60 * 60 * 1000);
 }

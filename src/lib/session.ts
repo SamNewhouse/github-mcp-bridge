@@ -30,7 +30,7 @@ function redis(): Redis {
     // Only initialize Redis client in production (Vercel)
     // Check for Vercel-specific environment
     const isVercel = process.env.VERCEL === "1";
-    
+
     if (!isVercel) {
       // Don't use Redis in local dev even if credentials are present
       return null as unknown as Redis;
@@ -59,12 +59,10 @@ export async function createSession(principal: string): Promise<string> {
 
   if (!client) {
     // In-memory path (local/CI)
-    const idleExpiresAt =
-      Date.now() + getMcpSessionIdleTtlMs();
-    const maxLifetimeExpiresAt =
-      Date.now() + getMcpSessionMaxTtlMs();
-    memorySessions.set(sessionId, { 
-      record, 
+    const idleExpiresAt = Date.now() + getMcpSessionIdleTtlMs();
+    const maxLifetimeExpiresAt = Date.now() + getMcpSessionMaxTtlMs();
+    memorySessions.set(sessionId, {
+      record,
       expiresAt: idleExpiresAt,
       maxLifetimeExpiresAt,
     });
@@ -97,21 +95,21 @@ export async function touchSessionForPrincipal(
     if (!entry || entry.record.principal !== principal) {
       return false;
     }
-    
+
     // Check if max lifetime has expired
     if (Date.now() > entry.maxLifetimeExpiresAt) {
       memorySessions.delete(sessionId);
       logInfo("mcp_session_expired", { sessionId, reason: "maximum" });
       return false;
     }
-    
+
     // Check if idle timeout has expired
     if (Date.now() > entry.expiresAt) {
       memorySessions.delete(sessionId);
       logInfo("mcp_session_expired", { sessionId, reason: "idle" });
       return false;
     }
-    
+
     // Slide idle window (but never past max lifetime)
     const newIdleExpiresAt = Date.now() + getMcpSessionIdleTtlMs();
     entry.expiresAt = Math.min(newIdleExpiresAt, entry.maxLifetimeExpiresAt);
@@ -125,8 +123,7 @@ export async function touchSessionForPrincipal(
     return false;
   }
 
-  const remainingMax =
-    record.createdAt + getMcpSessionMaxTtlMs() - Date.now();
+  const remainingMax = record.createdAt + getMcpSessionMaxTtlMs() - Date.now();
 
   if (remainingMax <= 0) {
     await client.del(key(sessionId));
