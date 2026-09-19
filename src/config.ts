@@ -33,10 +33,7 @@ function getEnv(): Env {
   return cachedEnv;
 }
 
-function getOptionalPositiveIntEnv(
-  key: string,
-  fallback: number,
-): number {
+function getOptionalPositiveIntEnv(key: string, fallback: number): number {
   const raw = process.env[key];
 
   if (raw === undefined || raw.trim() === "") {
@@ -78,10 +75,7 @@ export function getGithubPatForOwner(owner: string): {
   pat: string;
   key: string;
 } {
-  const ownerKey = owner
-    .trim()
-    .toUpperCase()
-    .replace(/-/g, "_");
+  const ownerKey = owner.trim().toUpperCase().replace(/-/g, "_");
 
   const ownerPatKey = `GITHUB_PAT_${ownerKey}`;
   const ownerPat = process.env[ownerPatKey]?.trim();
@@ -115,15 +109,9 @@ export function getPort(): number {
 }
 
 export function getMcpSessionIdleTtlMs(): number {
-  return getOptionalPositiveIntEnv(
-    "MCP_SESSION_IDLE_TTL_MS",
-    5 * 60 * 1000,
-  );
+  return getOptionalPositiveIntEnv("MCP_SESSION_IDLE_TTL_MS", 5 * 60 * 1000);
 }
 
 export function getMcpSessionMaxTtlMs(): number {
-  return getOptionalPositiveIntEnv(
-    "MCP_SESSION_MAX_TTL_MS",
-    60 * 60 * 1000,
-  );
+  return getOptionalPositiveIntEnv("MCP_SESSION_MAX_TTL_MS", 60 * 60 * 1000);
 }

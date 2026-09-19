@@ -64,17 +64,10 @@ export async function githubRequest<T>(
   }
 
   const representation = getCacheRepresentation(headers, responseType);
-  const bodyForCache = init.body
-    ? JSON.parse(init.body as string)
-    : undefined;
+  const bodyForCache = init.body ? JSON.parse(init.body as string) : undefined;
 
   if (method === "GET") {
-    const cached = getFromCache<T>(
-      method,
-      path,
-      bodyForCache,
-      representation,
-    );
+    const cached = getFromCache<T>(method, path, bodyForCache, representation);
 
     if (cached !== null) {
       const durationMs = Date.now() - startedAt;

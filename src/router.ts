@@ -399,12 +399,7 @@ export async function handleMcpRequest(
     }
 
     if (body.method === "ping") {
-      return sendJsonRpcResultWithSession(
-        res,
-        body.id ?? null,
-        {},
-        sessionId,
-      );
+      return sendJsonRpcResultWithSession(res, body.id ?? null, {}, sessionId);
     }
 
     if (body.method === "notifications/initialized") {

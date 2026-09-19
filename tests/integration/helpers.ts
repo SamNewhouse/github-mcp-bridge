@@ -91,10 +91,7 @@ export async function postAutoSessionJsonRpc(body: JsonRpcBody) {
   return postJsonRpc(body);
 }
 
-export async function callTool(
-  name: string,
-  input: Record<string, unknown>,
-) {
+export async function callTool(name: string, input: Record<string, unknown>) {
   const res = await postSessionJsonRpc({
     jsonrpc: "2.0",
     id: jsonRpcId(),

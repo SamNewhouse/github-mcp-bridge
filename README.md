@@ -58,12 +58,12 @@ The local server listens on `http://localhost:3000` by default.
 
 ## Environment Variables
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `GITHUB_PAT` | Yes | Default GitHub Personal Access Token used when no owner-specific token exists |
-| `GITHUB_PAT_<OWNER>` | No | Owner-specific GitHub token. The owner is uppercased and hyphens become underscores; for example, `my-org` maps to `GITHUB_PAT_MY_ORG` |
-| `CONNECTOR_SECRET` | Yes | Self-generated connector token. Add it to Vercel and use the same value when authenticating an MCP client to the hosted bridge |
-| `PORT` | No | HTTP port. Defaults to `3000` |
+| Variable             | Required | Description                                                                                                                            |
+| -------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_PAT`         | Yes      | Default GitHub Personal Access Token used when no owner-specific token exists                                                          |
+| `GITHUB_PAT_<OWNER>` | No       | Owner-specific GitHub token. The owner is uppercased and hyphens become underscores; for example, `my-org` maps to `GITHUB_PAT_MY_ORG` |
+| `CONNECTOR_SECRET`   | Yes      | Self-generated connector token. Add it to Vercel and use the same value when authenticating an MCP client to the hosted bridge         |
+| `PORT`               | No       | HTTP port. Defaults to `3000`                                                                                                          |
 
 Owner-specific token selection falls back to `GITHUB_PAT` when no matching `GITHUB_PAT_<OWNER>` variable is configured.
 
@@ -120,80 +120,80 @@ The bridge currently exposes **37 tools**. Call `tools/list` to obtain the autho
 
 ### Repositories
 
-| Tool | Description |
-| --- | --- |
+| Tool                | Description                                                 |
+| ------------------- | ----------------------------------------------------------- |
 | `list_repositories` | List repositories accessible to the configured GitHub token |
-| `get_repository` | Get details of a repository |
+| `get_repository`    | Get details of a repository                                 |
 
 ### Branches
 
-| Tool | Description |
-| --- | --- |
-| `list_branches` | List repository branches |
-| `get_branch` | Get branch details, including its latest commit |
-| `create_branch` | Create a branch from an existing branch |
+| Tool            | Description                                     |
+| --------------- | ----------------------------------------------- |
+| `list_branches` | List repository branches                        |
+| `get_branch`    | Get branch details, including its latest commit |
+| `create_branch` | Create a branch from an existing branch         |
 
 ### Files
 
-| Tool | Description |
-| --- | --- |
-| `get_file_contents` | Read a file with metadata; content larger than 3.5 MB is truncated |
-| `read_file` | Read decoded raw text from a file |
-| `get_multiple_files` | Read multiple files with cursor pagination |
-| `list_directory` | List a repository directory |
-| `upsert_file` | Create or replace a file in a branch |
-| `batch_upsert_files` | Create or replace multiple files in one commit |
-| `create_commit` | Write multiple files in one commit |
-| `patch_file` | Apply targeted text patches without replacing the entire file |
-| `delete_file` | Delete a file from a branch |
+| Tool                 | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| `get_file_contents`  | Read a file with metadata; content larger than 3.5 MB is truncated |
+| `read_file`          | Read decoded raw text from a file                                  |
+| `get_multiple_files` | Read multiple files with cursor pagination                         |
+| `list_directory`     | List a repository directory                                        |
+| `upsert_file`        | Create or replace a file in a branch                               |
+| `batch_upsert_files` | Create or replace multiple files in one commit                     |
+| `create_commit`      | Write multiple files in one commit                                 |
+| `patch_file`         | Apply targeted text patches without replacing the entire file      |
+| `delete_file`        | Delete a file from a branch                                        |
 
 ### Pull Requests
 
-| Tool | Description |
-| --- | --- |
-| `list_open_pull_requests` | List open pull requests |
-| `list_pull_requests` | List pull requests by state |
-| `get_pull_request` | Get pull request details |
-| `list_pull_request_files` | List files changed by a pull request |
-| `list_pull_request_comments` | List pull request conversation comments |
-| `get_pull_request_reviews` | List pull request reviews |
-| `get_pull_request_diff` | Get a pull request’s unified diff |
-| `create_pull_request` | Create a pull request |
-| `update_pull_request` | Update a pull request’s title, body, state, or base branch |
-| `add_pull_request_comment` | Add a conversation comment to a pull request |
+| Tool                         | Description                                                |
+| ---------------------------- | ---------------------------------------------------------- |
+| `list_open_pull_requests`    | List open pull requests                                    |
+| `list_pull_requests`         | List pull requests by state                                |
+| `get_pull_request`           | Get pull request details                                   |
+| `list_pull_request_files`    | List files changed by a pull request                       |
+| `list_pull_request_comments` | List pull request conversation comments                    |
+| `get_pull_request_reviews`   | List pull request reviews                                  |
+| `get_pull_request_diff`      | Get a pull request’s unified diff                          |
+| `create_pull_request`        | Create a pull request                                      |
+| `update_pull_request`        | Update a pull request’s title, body, state, or base branch |
+| `add_pull_request_comment`   | Add a conversation comment to a pull request               |
 
 ### Issues
 
-| Tool | Description |
-| --- | --- |
-| `list_issues` | List issues by state, excluding pull requests |
-| `get_issue` | Get issue details |
-| `create_issue` | Create an issue |
-| `update_issue` | Update an issue’s title, body, state, labels, or assignees |
+| Tool                         | Description                                                 |
+| ---------------------------- | ----------------------------------------------------------- |
+| `list_issues`                | List issues by state, excluding pull requests               |
+| `get_issue`                  | Get issue details                                           |
+| `create_issue`               | Create an issue                                             |
+| `update_issue`               | Update an issue’s title, body, state, labels, or assignees  |
 | `link_issue_to_pull_request` | Add a closing keyword that links an issue to a pull request |
-| `list_issue_comments` | List comments on an issue |
-| `add_issue_comment` | Add a comment to an issue |
+| `list_issue_comments`        | List comments on an issue                                   |
+| `add_issue_comment`          | Add a comment to an issue                                   |
 
 ### Commits
 
-| Tool | Description |
-| --- | --- |
-| `list_commits` | List commits, optionally filtered by branch or path |
-| `get_commit` | Get commit details, including changed files and diff stats |
+| Tool           | Description                                                |
+| -------------- | ---------------------------------------------------------- |
+| `list_commits` | List commits, optionally filtered by branch or path        |
+| `get_commit`   | Get commit details, including changed files and diff stats |
 
 ### Actions
 
-| Tool | Description |
-| --- | --- |
+| Tool                 | Description                                                         |
+| -------------------- | ------------------------------------------------------------------- |
 | `list_workflow_runs` | List workflow runs, optionally filtered by branch, event, or status |
-| `get_workflow_run` | Get workflow-run details, including jobs and steps |
+| `get_workflow_run`   | Get workflow-run details, including jobs and steps                  |
 
 ### Search
 
-| Tool | Description |
-| --- | --- |
-| `search_code` | Search code and return matching file paths and fragments |
-| `search_files` | Search file names and paths through the repository tree |
+| Tool           | Description                                              |
+| -------------- | -------------------------------------------------------- |
+| `search_code`  | Search code and return matching file paths and fragments |
+| `search_files` | Search file names and paths through the repository tree  |
 
 ## Tool Requests
 
@@ -257,16 +257,16 @@ The project currently has 19 test suites and 238 passing tests.
 
 ## Scripts
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start the development server with hot reload |
-| `npm run build` | Compile TypeScript to `dist` |
-| `npm start` | Run the compiled server |
-| `npm test` | Run unit and integration tests |
-| `npm run test:unit` | Run unit tests |
-| `npm run test:integration` | Run integration tests |
-| `npm run typecheck` | Type-check without emitting files |
-| `npm run format` | Format the project with Prettier |
+| Command                    | Description                                  |
+| -------------------------- | -------------------------------------------- |
+| `npm run dev`              | Start the development server with hot reload |
+| `npm run build`            | Compile TypeScript to `dist`                 |
+| `npm start`                | Run the compiled server                      |
+| `npm test`                 | Run unit and integration tests               |
+| `npm run test:unit`        | Run unit tests                               |
+| `npm run test:integration` | Run integration tests                        |
+| `npm run typecheck`        | Type-check without emitting files            |
+| `npm run format`           | Format the project with Prettier             |
 
 ## Security
 
