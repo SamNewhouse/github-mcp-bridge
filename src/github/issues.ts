@@ -78,10 +78,10 @@ export async function listIssues(
 export async function getIssue(
   owner: string,
   repo: string,
-  issueNumber: number,
+  issue_number: number,
 ) {
   const issue = await githubRequest<GitHubIssue>(
-    `/repos/${owner}/${repo}/issues/${issueNumber}`,
+    `/repos/${owner}/${repo}/issues/${issue_number}`,
     { owner },
   );
 
@@ -141,7 +141,7 @@ export async function createIssue(
 export async function updateIssue(
   owner: string,
   repo: string,
-  issueNumber: number,
+  issue_number: number,
   input: GitHubUpdateIssueInput,
 ) {
   const payload: Record<string, unknown> = {};
@@ -157,7 +157,7 @@ export async function updateIssue(
   }
 
   const issue = await githubRequest<GitHubIssue>(
-    `/repos/${owner}/${repo}/issues/${issueNumber}`,
+    `/repos/${owner}/${repo}/issues/${issue_number}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -183,33 +183,33 @@ export async function updateIssue(
 export async function linkIssueToPullRequest(
   owner: string,
   repo: string,
-  pullNumber: number,
-  issueNumber: number,
+  pull_number: number,
+  issue_number: number,
   keyword: "closes" | "fixes" | "resolves" = "closes",
 ) {
   const pr = await githubRequest<{ body: string | null; number: number }>(
-    `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    `/repos/${owner}/${repo}/pulls/${pull_number}`,
     { owner },
   );
 
-  const linkText = `\n\n${keyword} #${issueNumber}`;
+  const linkText = `\n\n${keyword} #${issue_number}`;
   const currentBody = pr.body ?? "";
 
   const alreadyLinked = new RegExp(
-    `(closes|fixes|resolves)\\s+#${issueNumber}`,
+    `(closes|fixes|resolves)\\s+#${issue_number}`,
     "i",
   ).test(currentBody);
 
   if (alreadyLinked) {
     return {
-      pullNumber,
-      issueNumber,
+      pull_number,
+      issue_number,
       linked: false,
-      reason: `Issue #${issueNumber} is already linked in the PR body`,
+      reason: `Issue #${issue_number} is already linked in the PR body`,
     };
   }
 
-  await githubRequest<unknown>(`/repos/${owner}/${repo}/pulls/${pullNumber}`, {
+  await githubRequest<unknown>(`/repos/${owner}/${repo}/pulls/${pull_number}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ body: currentBody + linkText }),
@@ -217,8 +217,8 @@ export async function linkIssueToPullRequest(
   });
 
   return {
-    pullNumber,
-    issueNumber,
+    pull_number,
+    issue_number,
     linked: true,
     keyword,
   };
@@ -227,10 +227,10 @@ export async function linkIssueToPullRequest(
 export async function listIssueComments(
   owner: string,
   repo: string,
-  issueNumber: number,
+  issue_number: number,
 ) {
   const comments = await githubRequest<GitHubIssueComment[]>(
-    `/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100`,
+    `/repos/${owner}/${repo}/issues/${issue_number}/comments?per_page=100`,
     { owner },
   );
 
@@ -247,11 +247,11 @@ export async function listIssueComments(
 export async function addIssueComment(
   owner: string,
   repo: string,
-  issueNumber: number,
+  issue_number: number,
   body: string,
 ) {
   const comment = await githubRequest<GitHubIssueComment>(
-    `/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    `/repos/${owner}/${repo}/issues/${issue_number}/comments`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

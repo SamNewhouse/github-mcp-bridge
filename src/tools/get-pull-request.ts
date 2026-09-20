@@ -6,7 +6,7 @@ export const getPullRequestTool = defineTool({
   name: "get_pull_request",
   description: "Get a pull request by number.",
   input: pullRequestInputSchema,
-  handler: async ({ owner, repo, pullNumber }) => ({
-    pullRequest: await getPullRequest(owner, repo, pullNumber),
+  handler: async ({ owner, repo, pull_number }) => ({
+    pullRequest: await getPullRequest(owner, repo, pull_number),
   }),
 });

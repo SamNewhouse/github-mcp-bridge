@@ -1,6 +1,6 @@
 import { callTool, callToolRaw, OWNER, REPO } from "./helpers";
 
-async function getKnownClosedIssueNumber(): Promise<number | null> {
+async function getKnownClosedissue_number(): Promise<number | null> {
   const result = await callTool("list_issues", {
     owner: OWNER,
     repo: REPO,
@@ -54,16 +54,16 @@ describe("list_issues (integration)", () => {
 
 describe("get_issue (integration)", () => {
   it("returns the expected fields for a known closed issue", async () => {
-    const knownIssueNumber = await getKnownClosedIssueNumber();
-    if (knownIssueNumber === null) {
+    const knownissue_number = await getKnownClosedissue_number();
+    if (knownissue_number === null) {
       return;
     }
     const result = await callTool("get_issue", {
       owner: OWNER,
       repo: REPO,
-      issueNumber: knownIssueNumber,
+      issue_number: knownissue_number,
     });
-    expect(result.issue).toHaveProperty("number", knownIssueNumber);
+    expect(result.issue).toHaveProperty("number", knownissue_number);
     expect(result.issue).toHaveProperty("title");
     expect(result.issue).toHaveProperty("state", "closed");
     expect(result.issue).toHaveProperty("html_url");
@@ -80,14 +80,14 @@ describe("get_issue (integration)", () => {
       callTool("get_issue", {
         owner: OWNER,
         repo: REPO,
-        issueNumber: KNOWN_PR_NUMBER,
+        issue_number: KNOWN_PR_NUMBER,
       }),
     ).rejects.toThrow();
   });
 
   it("throws for a non-existent issue number", async () => {
     await expect(
-      callTool("get_issue", { owner: OWNER, repo: REPO, issueNumber: 999999 }),
+      callTool("get_issue", { owner: OWNER, repo: REPO, issue_number: 999999 }),
     ).rejects.toThrow();
   });
 });
@@ -115,12 +115,12 @@ describe("add_issue_comment (integration — validation)", () => {
     const json = await callToolRaw("add_issue_comment", {
       owner: OWNER,
       repo: REPO,
-      issueNumber: KNOWN_PR_NUMBER,
+      issue_number: KNOWN_PR_NUMBER,
     });
     expect(json.error).toBeDefined();
   });
 
-  it("rejects request with missing issueNumber field", async () => {
+  it("rejects request with missing issue_number field", async () => {
     const json = await callToolRaw("add_issue_comment", {
       owner: OWNER,
       repo: REPO,
@@ -135,7 +135,7 @@ describe("list_issue_comments (integration)", () => {
     const result = await callTool("list_issue_comments", {
       owner: OWNER,
       repo: REPO,
-      issueNumber: KNOWN_PR_NUMBER,
+      issue_number: KNOWN_PR_NUMBER,
     });
     expect(Array.isArray(result.comments)).toBe(true);
     if (result.comments.length > 0) {
@@ -150,7 +150,7 @@ describe("list_issue_comments (integration)", () => {
       callTool("list_issue_comments", {
         owner: OWNER,
         repo: REPO,
-        issueNumber: 999999,
+        issue_number: 999999,
       }),
     ).rejects.toThrow();
   });
