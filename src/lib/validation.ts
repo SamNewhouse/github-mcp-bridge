@@ -40,7 +40,7 @@ export const listDirectoryInputSchema = repositoryInputSchema.extend({
 });
 
 export const pullRequestInputSchema = repositoryInputSchema.extend({
-  pullNumber: z.coerce.number().int().positive(),
+  pull_number: z.coerce.number().int().positive(),
 });
 
 export const updatePullRequestInputSchema = pullRequestInputSchema.extend({
@@ -70,9 +70,8 @@ export const toolRequestSchema = z.object({
   input: z.unknown().optional(),
 });
 
-// Issues
 export const issueInputSchema = repositoryInputSchema.extend({
-  issueNumber: z.coerce.number().int().positive(),
+  issue_number: z.coerce.number().int().positive(),
 });
 
 export const listIssuesInputSchema = repositoryInputSchema.extend({
@@ -95,8 +94,8 @@ export const updateIssueInputSchema = issueInputSchema.extend({
 });
 
 export const linkIssueToPullRequestInputSchema = repositoryInputSchema.extend({
-  pullNumber: z.coerce.number().int().positive(),
-  issueNumber: z.coerce.number().int().positive(),
+  pull_number: z.coerce.number().int().positive(),
+  issue_number: z.coerce.number().int().positive(),
   keyword: z.enum(["closes", "fixes", "resolves"]).default("closes"),
 });
 

@@ -97,12 +97,12 @@ function mapPullRequest(pr: GitHubPullRequest) {
 export async function addPullRequestComment(
   owner: string,
   repo: string,
-  pullNumber: number,
+  pull_number: number,
   body: string,
 ) {
   // PR conversation comments are created via the issues comments endpoint.
   const comment = await githubRequest<GitHubConversationComment>(
-    `/repos/${owner}/${repo}/issues/${pullNumber}/comments`,
+    `/repos/${owner}/${repo}/issues/${pull_number}/comments`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -167,10 +167,10 @@ export async function listPullRequests(
 export async function getPullRequest(
   owner: string,
   repo: string,
-  pullNumber: number,
+  pull_number: number,
 ) {
   const pr = await githubRequest<GitHubPullRequest>(
-    `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    `/repos/${owner}/${repo}/pulls/${pull_number}`,
     { owner },
   );
 
@@ -180,10 +180,10 @@ export async function getPullRequest(
 export async function listPullRequestFiles(
   owner: string,
   repo: string,
-  pullNumber: number,
+  pull_number: number,
 ) {
   const files = await githubRequest<GitHubPullRequestFile[]>(
-    `/repos/${owner}/${repo}/pulls/${pullNumber}/files?per_page=${PR_FILES_PAGE_LIMIT}`,
+    `/repos/${owner}/${repo}/pulls/${pull_number}/files?per_page=${PR_FILES_PAGE_LIMIT}`,
     { owner },
   );
 
@@ -206,12 +206,12 @@ export async function listPullRequestFiles(
 export async function listPullRequestComments(
   owner: string,
   repo: string,
-  pullNumber: number,
+  pull_number: number,
 ) {
   // Returns conversation comments from the PR timeline (issue-style).
-  // Inline review comments on specific lines live at /pulls/${pullNumber}/comments.
+  // Inline review comments on specific lines live at /pulls/${pull_number}/comments.
   const comments = await githubRequest<GitHubConversationComment[]>(
-    `/repos/${owner}/${repo}/issues/${pullNumber}/comments?per_page=100`,
+    `/repos/${owner}/${repo}/issues/${pull_number}/comments?per_page=100`,
     { owner },
   );
 
@@ -228,10 +228,10 @@ export async function listPullRequestComments(
 export async function getPullRequestReviews(
   owner: string,
   repo: string,
-  pullNumber: number,
+  pull_number: number,
 ) {
   const reviews = await githubRequest<GitHubPullRequestReview[]>(
-    `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews?per_page=100`,
+    `/repos/${owner}/${repo}/pulls/${pull_number}/reviews?per_page=100`,
     { owner },
   );
 
@@ -249,7 +249,7 @@ export async function getPullRequestReviews(
 export async function updatePullRequest(
   owner: string,
   repo: string,
-  pullNumber: number,
+  pull_number: number,
   input: {
     title?: string;
     body?: string;
@@ -269,7 +269,7 @@ export async function updatePullRequest(
   }
 
   const pr = await githubRequest<GitHubPullRequest>(
-    `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    `/repos/${owner}/${repo}/pulls/${pull_number}`,
     {
       method: "PATCH",
       headers: {
@@ -312,10 +312,10 @@ export async function createPullRequest(
 export async function getPullRequestDiff(
   owner: string,
   repo: string,
-  pullNumber: number,
+  pull_number: number,
 ) {
   const diff = await githubRequest<string>(
-    `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    `/repos/${owner}/${repo}/pulls/${pull_number}`,
     {
       headers: {
         Accept: "application/vnd.github.diff",
@@ -326,7 +326,7 @@ export async function getPullRequestDiff(
   );
 
   return {
-    pullNumber,
+    pull_number,
     diff,
   };
 }

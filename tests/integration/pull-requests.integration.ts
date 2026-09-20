@@ -81,7 +81,7 @@ describe("get_pull_request (integration)", () => {
     const result = await callTool("get_pull_request", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
     expect(result.pullRequest).toHaveProperty("number", knownPrNumber);
     expect(result.pullRequest).toHaveProperty("draft");
@@ -95,7 +95,7 @@ describe("get_pull_request (integration)", () => {
       callTool("get_pull_request", {
         owner: OWNER,
         repo: REPO,
-        pullNumber: 999999,
+        pull_number: 999999,
       }),
     ).rejects.toThrow();
   });
@@ -110,9 +110,9 @@ describe("get_pull_request_diff (integration)", () => {
     const result = await callTool("get_pull_request_diff", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
-    expect(result.diff.pullNumber).toBe(knownPrNumber);
+    expect(result.diff.pull_number).toBe(knownPrNumber);
     expect(typeof result.diff.diff).toBe("string");
     expect(result.diff.diff.length).toBeGreaterThan(0);
   });
@@ -127,7 +127,7 @@ describe("get_pull_request_reviews (integration)", () => {
     const result = await callTool("get_pull_request_reviews", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
     expect(Array.isArray(result.reviews)).toBe(true);
   });
@@ -140,7 +140,7 @@ describe("get_pull_request_reviews (integration)", () => {
     const result = await callTool("get_pull_request_reviews", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
     if (result.reviews.length > 0) {
       const review = result.reviews[0];
@@ -159,7 +159,7 @@ describe("get_pull_request_reviews (integration)", () => {
       callTool("get_pull_request_reviews", {
         owner: OWNER,
         repo: REPO,
-        pullNumber: 999999,
+        pull_number: 999999,
       }),
     ).rejects.toThrow();
   });
@@ -174,7 +174,7 @@ describe("list_pull_request_files (integration)", () => {
     const result = await callTool("list_pull_request_files", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
     expect(result.files).toHaveProperty("files");
     expect(Array.isArray(result.files.files)).toBe(true);
@@ -189,7 +189,7 @@ describe("list_pull_request_files (integration)", () => {
     const result = await callTool("list_pull_request_files", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
     if (result.files.files.length > 0) {
       const file = result.files.files[0];
@@ -212,7 +212,7 @@ describe("list_pull_request_comments (integration)", () => {
     const result = await callTool("list_pull_request_comments", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
     expect(Array.isArray(result.comments)).toBe(true);
     if (result.comments.length > 0) {
@@ -230,7 +230,7 @@ describe("list_pull_request_comments (integration)", () => {
     const result = await callTool("list_pull_request_comments", {
       owner: OWNER,
       repo: REPO,
-      pullNumber: knownPrNumber,
+      pull_number: knownPrNumber,
     });
     if (result.comments.length > 0) {
       const comment = result.comments[0];

@@ -6,7 +6,7 @@ export const listIssueCommentsTool = defineTool({
   name: "list_issue_comments",
   description: "List all comments on an issue.",
   input: issueInputSchema,
-  handler: async ({ owner, repo, issueNumber }) => ({
-    comments: await listIssueComments(owner, repo, issueNumber),
+  handler: async ({ owner, repo, issue_number }) => ({
+    comments: await listIssueComments(owner, repo, issue_number),
   }),
 });

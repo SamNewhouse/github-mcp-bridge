@@ -350,22 +350,22 @@ describe("getPullRequest", () => {
  * Fetches the raw unified diff for a pull request. Requires the
  * application/vnd.github.diff Accept header and responseType: "text" so
  * githubRequest returns the raw diff string rather than attempting JSON
- * parsing. Returns { pullNumber, diff }.
+ * parsing. Returns { pull_number, diff }.
  */
 describe("getPullRequestDiff", () => {
   /**
-   * Happy path — returns pullNumber and the raw unified diff string.
-   * Asserts the shape matches { pullNumber, diff } and the diff content
+   * Happy path — returns pull_number and the raw unified diff string.
+   * Asserts the shape matches { pull_number, diff } and the diff content
    * is the string returned by the GitHub diff endpoint.
    */
-  it("returns pullNumber and diff string", async () => {
+  it("returns pull_number and diff string", async () => {
     const rawDiff =
       "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new";
     mock.mockResolvedValueOnce(rawDiff);
 
     const result = await getPullRequestDiff("owner", "repo", 10);
 
-    expect(result.pullNumber).toBe(10);
+    expect(result.pull_number).toBe(10);
     expect(result.diff).toBe(rawDiff);
   });
 
@@ -408,7 +408,7 @@ describe("getPullRequestDiff", () => {
     const result = await getPullRequestDiff("owner", "repo", 10);
 
     expect(result.diff).toBe("");
-    expect(result.pullNumber).toBe(10);
+    expect(result.pull_number).toBe(10);
   });
 });
 
@@ -489,7 +489,7 @@ describe("listPullRequestComments", () => {
 /**
  * getPullRequestReviews
  *
- * Fetches all reviews on a pull request from /pulls/:pullNumber/reviews.
+ * Fetches all reviews on a pull request from /pulls/:pull_number/reviews.
  * Maps each review to a flat shape with author from user.login.
  * submitted_at is preserved as null for pending or dismissed reviews.
  * Uses per_page=100.
@@ -572,7 +572,7 @@ describe("getPullRequestReviews", () => {
 
   /**
    * Uses the correct reviews endpoint — asserts the URL calls
-   * /pulls/:pullNumber/reviews, not /issues/:pullNumber/comments.
+   * /pulls/:pull_number/reviews, not /issues/:pull_number/comments.
    */
   it("fetches from the pulls reviews endpoint", async () => {
     mock.mockResolvedValueOnce([]);

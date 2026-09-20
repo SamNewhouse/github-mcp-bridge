@@ -6,8 +6,8 @@ export const updatePullRequestTool = defineTool({
   name: "update_pull_request",
   description: "Update a pull request.",
   input: updatePullRequestInputSchema,
-  handler: async ({ owner, repo, pullNumber, title, body, base, state }) => ({
-    pullRequest: await updatePullRequest(owner, repo, pullNumber, {
+  handler: async ({ owner, repo, pull_number, title, body, base, state }) => ({
+    pullRequest: await updatePullRequest(owner, repo, pull_number, {
       title,
       body,
       base,

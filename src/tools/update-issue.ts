@@ -10,14 +10,14 @@ export const updateIssueTool = defineTool({
   handler: async ({
     owner,
     repo,
-    issueNumber,
+    issue_number,
     title,
     body,
     state,
     labels,
     assignees,
   }) => ({
-    issue: await updateIssue(owner, repo, issueNumber, {
+    issue: await updateIssue(owner, repo, issue_number, {
       title,
       body,
       state,
