@@ -94,22 +94,14 @@ function mapPullRequest(pr: GitHubPullRequest) {
   };
 }
 
-export async function addPullRequestComment(
-  owner: string,
-  repo: string,
-  pull_number: number,
-  body: string,
-) {
+export async function addPullRequestComment(owner: string, repo: string, pull_number: number, body: string) {
   // PR conversation comments are created via the issues comments endpoint.
-  const comment = await githubRequest<GitHubConversationComment>(
-    `/repos/${owner}/${repo}/issues/${pull_number}/comments`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body }),
-      owner,
-    },
-  );
+  const comment = await githubRequest<GitHubConversationComment>(`/repos/${owner}/${repo}/issues/${pull_number}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+    owner,
+  });
 
   return {
     id: comment.id,
@@ -122,10 +114,7 @@ export async function addPullRequestComment(
 }
 
 export async function listOpenPullRequests(owner: string, repo: string) {
-  const prs = await githubRequest<GitHubPullRequest[]>(
-    `/repos/${owner}/${repo}/pulls?state=open&per_page=100`,
-    { owner },
-  );
+  const prs = await githubRequest<GitHubPullRequest[]>(`/repos/${owner}/${repo}/pulls?state=open&per_page=100`, { owner });
 
   return prs.map((pr) => ({
     number: pr.number,
@@ -140,15 +129,8 @@ export async function listOpenPullRequests(owner: string, repo: string) {
   }));
 }
 
-export async function listPullRequests(
-  owner: string,
-  repo: string,
-  state: "open" | "closed" | "all" = "open",
-) {
-  const prs = await githubRequest<GitHubPullRequest[]>(
-    `/repos/${owner}/${repo}/pulls?state=${encodeURIComponent(state)}&per_page=100`,
-    { owner },
-  );
+export async function listPullRequests(owner: string, repo: string, state: "open" | "closed" | "all" = "open") {
+  const prs = await githubRequest<GitHubPullRequest[]>(`/repos/${owner}/${repo}/pulls?state=${encodeURIComponent(state)}&per_page=100`, { owner });
 
   return prs.map((pr) => ({
     number: pr.number,
@@ -164,28 +146,14 @@ export async function listPullRequests(
   }));
 }
 
-export async function getPullRequest(
-  owner: string,
-  repo: string,
-  pull_number: number,
-) {
-  const pr = await githubRequest<GitHubPullRequest>(
-    `/repos/${owner}/${repo}/pulls/${pull_number}`,
-    { owner },
-  );
+export async function getPullRequest(owner: string, repo: string, pull_number: number) {
+  const pr = await githubRequest<GitHubPullRequest>(`/repos/${owner}/${repo}/pulls/${pull_number}`, { owner });
 
   return mapPullRequest(pr);
 }
 
-export async function listPullRequestFiles(
-  owner: string,
-  repo: string,
-  pull_number: number,
-) {
-  const files = await githubRequest<GitHubPullRequestFile[]>(
-    `/repos/${owner}/${repo}/pulls/${pull_number}/files?per_page=${PR_FILES_PAGE_LIMIT}`,
-    { owner },
-  );
+export async function listPullRequestFiles(owner: string, repo: string, pull_number: number) {
+  const files = await githubRequest<GitHubPullRequestFile[]>(`/repos/${owner}/${repo}/pulls/${pull_number}/files?per_page=${PR_FILES_PAGE_LIMIT}`, { owner });
 
   return {
     files: files.map((file) => ({
@@ -203,17 +171,10 @@ export async function listPullRequestFiles(
   };
 }
 
-export async function listPullRequestComments(
-  owner: string,
-  repo: string,
-  pull_number: number,
-) {
+export async function listPullRequestComments(owner: string, repo: string, pull_number: number) {
   // Returns conversation comments from the PR timeline (issue-style).
   // Inline review comments on specific lines live at /pulls/${pull_number}/comments.
-  const comments = await githubRequest<GitHubConversationComment[]>(
-    `/repos/${owner}/${repo}/issues/${pull_number}/comments?per_page=100`,
-    { owner },
-  );
+  const comments = await githubRequest<GitHubConversationComment[]>(`/repos/${owner}/${repo}/issues/${pull_number}/comments?per_page=100`, { owner });
 
   return comments.map((comment) => ({
     id: comment.id,
@@ -225,15 +186,8 @@ export async function listPullRequestComments(
   }));
 }
 
-export async function getPullRequestReviews(
-  owner: string,
-  repo: string,
-  pull_number: number,
-) {
-  const reviews = await githubRequest<GitHubPullRequestReview[]>(
-    `/repos/${owner}/${repo}/pulls/${pull_number}/reviews?per_page=100`,
-    { owner },
-  );
+export async function getPullRequestReviews(owner: string, repo: string, pull_number: number) {
+  const reviews = await githubRequest<GitHubPullRequestReview[]>(`/repos/${owner}/${repo}/pulls/${pull_number}/reviews?per_page=100`, { owner });
 
   return reviews.map((review) => ({
     id: review.id,
@@ -268,62 +222,45 @@ export async function updatePullRequest(
     throw new AppError("No update fields provided", 400);
   }
 
-  const pr = await githubRequest<GitHubPullRequest>(
-    `/repos/${owner}/${repo}/pulls/${pull_number}`,
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      owner,
+  const pr = await githubRequest<GitHubPullRequest>(`/repos/${owner}/${repo}/pulls/${pull_number}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(payload),
+    owner,
+  });
 
   return mapPullRequest(pr);
 }
 
-export async function createPullRequest(
-  owner: string,
-  repo: string,
-  input: GitHubCreatePullRequestInput,
-) {
-  const pr = await githubRequest<GitHubPullRequest>(
-    `/repos/${owner}/${repo}/pulls`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        title: input.title,
-        body: input.body ?? "",
-        head: input.head,
-        base: input.base,
-        ...(input.draft !== undefined ? { draft: input.draft } : {}),
-      }),
-      owner,
+export async function createPullRequest(owner: string, repo: string, input: GitHubCreatePullRequestInput) {
+  const pr = await githubRequest<GitHubPullRequest>(`/repos/${owner}/${repo}/pulls`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      title: input.title,
+      body: input.body ?? "",
+      head: input.head,
+      base: input.base,
+      ...(input.draft !== undefined ? { draft: input.draft } : {}),
+    }),
+    owner,
+  });
 
   return mapPullRequest(pr);
 }
 
-export async function getPullRequestDiff(
-  owner: string,
-  repo: string,
-  pull_number: number,
-) {
-  const diff = await githubRequest<string>(
-    `/repos/${owner}/${repo}/pulls/${pull_number}`,
-    {
-      headers: {
-        Accept: "application/vnd.github.diff",
-      },
-      responseType: "text",
-      owner,
+export async function getPullRequestDiff(owner: string, repo: string, pull_number: number) {
+  const diff = await githubRequest<string>(`/repos/${owner}/${repo}/pulls/${pull_number}`, {
+    headers: {
+      Accept: "application/vnd.github.diff",
     },
-  );
+    responseType: "text",
+    owner,
+  });
 
   return {
     pull_number,

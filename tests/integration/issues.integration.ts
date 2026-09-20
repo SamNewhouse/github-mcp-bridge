@@ -86,9 +86,7 @@ describe("get_issue (integration)", () => {
   });
 
   it("throws for a non-existent issue number", async () => {
-    await expect(
-      callTool("get_issue", { owner: OWNER, repo: REPO, issue_number: 999999 }),
-    ).rejects.toThrow();
+    await expect(callTool("get_issue", { owner: OWNER, repo: REPO, issue_number: 999999 })).rejects.toThrow();
   });
 });
 

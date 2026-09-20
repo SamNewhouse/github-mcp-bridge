@@ -85,9 +85,7 @@ describe("session helper", () => {
     expect(typeof sessionId).toBe("string");
     expect(sessionId.length).toBeGreaterThan(0);
     expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(true);
-    expect(await touchSessionForPrincipal(sessionId, "principal-b")).toBe(
-      false,
-    );
+    expect(await touchSessionForPrincipal(sessionId, "principal-b")).toBe(false);
   });
 
   it("creates a new session on each call to getOrCreateSessionForPrincipal", async () => {
@@ -110,9 +108,7 @@ describe("session helper", () => {
   });
 
   it("rejects an unknown session", async () => {
-    expect(
-      await touchSessionForPrincipal("missing-session", "principal-a"),
-    ).toBe(false);
+    expect(await touchSessionForPrincipal("missing-session", "principal-a")).toBe(false);
   });
 
   it("expires a session after the idle TTL", async () => {
@@ -120,9 +116,7 @@ describe("session helper", () => {
 
     jest.advanceTimersByTime(5 * MINUTE + 1);
 
-    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(
-      false,
-    );
+    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(false);
   });
 
   it("slides the idle window on each touch", async () => {
@@ -136,9 +130,7 @@ describe("session helper", () => {
     expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(true);
 
     jest.advanceTimersByTime(5 * MINUTE + 1);
-    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(
-      false,
-    );
+    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(false);
   });
 
   it("never extends a session past the maximum lifetime", async () => {
@@ -146,39 +138,27 @@ describe("session helper", () => {
 
     for (let i = 0; i < 14; i++) {
       jest.advanceTimersByTime(4 * MINUTE);
-      expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(
-        true,
-      );
+      expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(true);
     }
 
     // 56 minutes in, the remaining lifetime is 4 minutes.
     jest.advanceTimersByTime(5 * MINUTE);
 
-    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(
-      false,
-    );
+    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(false);
   });
 
   it("deletes a session for its owner only", async () => {
     const sessionId = await createSession("principal-a");
 
-    expect(await deleteSessionForPrincipal(sessionId, "principal-b")).toBe(
-      false,
-    );
+    expect(await deleteSessionForPrincipal(sessionId, "principal-b")).toBe(false);
     expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(true);
 
-    expect(await deleteSessionForPrincipal(sessionId, "principal-a")).toBe(
-      true,
-    );
-    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(
-      false,
-    );
+    expect(await deleteSessionForPrincipal(sessionId, "principal-a")).toBe(true);
+    expect(await touchSessionForPrincipal(sessionId, "principal-a")).toBe(false);
   });
 
   it("returns false when deleting an unknown session", async () => {
-    expect(
-      await deleteSessionForPrincipal("missing-session", "principal-a"),
-    ).toBe(false);
+    expect(await deleteSessionForPrincipal("missing-session", "principal-a")).toBe(false);
   });
 
   it("extracts session id from headers", () => {

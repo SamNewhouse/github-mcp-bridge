@@ -5,10 +5,7 @@ const githubNameSchema = z
   .string()
   .min(1)
   .max(100)
-  .regex(
-    /^[a-zA-Z0-9._-]+$/,
-    "must only contain alphanumeric characters, hyphens, underscores, or dots",
-  );
+  .regex(/^[a-zA-Z0-9._-]+$/, "must only contain alphanumeric characters, hyphens, underscores, or dots");
 
 export const repositoryInputSchema = z.object({
   owner: githubNameSchema,
@@ -26,9 +23,7 @@ export const getFileContentsInputSchema = repositoryInputSchema.extend({
 });
 
 export const getMultipleFilesInputSchema = repositoryInputSchema.extend({
-  paths: z
-    .array(z.string().min(1, "path is required"))
-    .min(1, "at least one path is required"),
+  paths: z.array(z.string().min(1, "path is required")).min(1, "at least one path is required"),
   ref: z.string().min(1).optional(),
   cursor: z.coerce.number().int().min(0).optional(),
   pageSize: z.coerce.number().int().min(1).max(20).optional(),
@@ -161,12 +156,7 @@ const insertAfterPatchSchema = z.object({
   content: z.string(),
 });
 
-export const patchOpSchema = z.discriminatedUnion("op", [
-  replaceOncePatchSchema,
-  replaceAllPatchSchema,
-  insertBeforePatchSchema,
-  insertAfterPatchSchema,
-]);
+export const patchOpSchema = z.discriminatedUnion("op", [replaceOncePatchSchema, replaceAllPatchSchema, insertBeforePatchSchema, insertAfterPatchSchema]);
 
 export type PatchOp = z.infer<typeof patchOpSchema>;
 
@@ -199,9 +189,7 @@ const batchUpsertEntrySchema = z.object({
 export const batchUpsertFilesInputSchema = repositoryInputSchema.extend({
   branch: z.string().min(1, "branch is required"),
   message: z.string().min(1, "message is required"),
-  files: z
-    .array(batchUpsertEntrySchema)
-    .min(1, "at least one file is required"),
+  files: z.array(batchUpsertEntrySchema).min(1, "at least one file is required"),
 });
 
 // create_commit shares the same schema as batch_upsert_files
@@ -227,3 +215,15 @@ export const getWorkflowRunInputSchema = repositoryInputSchema.extend({
 
 // New: get_repository
 export const getRepositoryInputSchema = repositoryInputSchema;
+
+export const jsonRpcRequestSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  id: z.union([z.string(), z.number(), z.null()]).optional(),
+  method: z.string(),
+  params: z.unknown().optional(),
+});
+
+export const toolCallParamsSchema = z.object({
+  name: z.string(),
+  arguments: z.record(z.string(), z.unknown()).default({}),
+});

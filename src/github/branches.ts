@@ -32,10 +32,7 @@ type GitHubBranchDetail = {
 };
 
 export async function listBranches(owner: string, repo: string) {
-  const branches = await githubRequest<GitHubBranch[]>(
-    `/repos/${owner}/${repo}/branches?per_page=100`,
-    { owner },
-  );
+  const branches = await githubRequest<GitHubBranch[]>(`/repos/${owner}/${repo}/branches?per_page=100`, { owner });
 
   return branches.map((branch) => ({
     name: branch.name,
@@ -44,16 +41,8 @@ export async function listBranches(owner: string, repo: string) {
   }));
 }
 
-export async function createBranch(
-  owner: string,
-  repo: string,
-  baseBranch: string,
-  newBranch: string,
-) {
-  const base = await githubRequest<GitHubBranch>(
-    `/repos/${owner}/${repo}/branches/${baseBranch}`,
-    { owner },
-  );
+export async function createBranch(owner: string, repo: string, baseBranch: string, newBranch: string) {
+  const base = await githubRequest<GitHubBranch>(`/repos/${owner}/${repo}/branches/${baseBranch}`, { owner });
 
   const sha = base.commit.sha;
 
@@ -71,10 +60,7 @@ export async function createBranch(
 }
 
 export async function getBranch(owner: string, repo: string, branch: string) {
-  const result = await githubRequest<GitHubBranchDetail>(
-    `/repos/${owner}/${repo}/branches/${branch}`,
-    { owner },
-  );
+  const result = await githubRequest<GitHubBranchDetail>(`/repos/${owner}/${repo}/branches/${branch}`, { owner });
 
   return {
     name: result.name,

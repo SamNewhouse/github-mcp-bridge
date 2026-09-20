@@ -32,10 +32,7 @@ type GitHubRepository = {
 };
 
 export async function getRepository(owner: string, repo: string) {
-  const r = await githubRequest<GitHubFullRepository>(
-    `/repos/${owner}/${repo}`,
-    { owner },
-  );
+  const r = await githubRequest<GitHubFullRepository>(`/repos/${owner}/${repo}`, { owner });
 
   return {
     id: r.id,
@@ -59,9 +56,7 @@ export async function getRepository(owner: string, repo: string) {
 }
 
 export async function listRepositories() {
-  const repos = await githubRequest<GitHubRepository[]>(
-    "/user/repos?sort=updated&per_page=100",
-  );
+  const repos = await githubRequest<GitHubRepository[]>("/user/repos?sort=updated&per_page=100");
 
   return repos.map((repo) => ({
     id: repo.id,

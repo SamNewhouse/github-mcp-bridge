@@ -44,10 +44,7 @@ function secretsEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
 }
 
-export function getAuthorizedPrincipal(
-  req: http.IncomingMessage,
-  log?: RequestLogger,
-): string {
+export function getAuthorizedPrincipal(req: http.IncomingMessage, log?: RequestLogger): string {
   const authHeader = req.headers.authorization;
   const bearerToken = getBearerToken(authHeader);
   const apiKey = getApiKeyHeader(req.headers["x-api-key"]);
@@ -65,9 +62,7 @@ export function getAuthorizedPrincipal(
   }
 
   const validSecrets = getConnectorSecrets();
-  const isAuthorized = validSecrets.some((expected) =>
-    secretsEqual(providedSecret, expected),
-  );
+  const isAuthorized = validSecrets.some((expected) => secretsEqual(providedSecret, expected));
 
   if (!isAuthorized) {
     log?.warn("authorization_invalid", {
@@ -82,9 +77,6 @@ export function getAuthorizedPrincipal(
   return crypto.createHash("sha256").update(providedSecret).digest("hex");
 }
 
-export function assertAuthorized(
-  req: http.IncomingMessage,
-  log?: RequestLogger,
-): void {
+export function assertAuthorized(req: http.IncomingMessage, log?: RequestLogger): void {
   getAuthorizedPrincipal(req, log);
 }

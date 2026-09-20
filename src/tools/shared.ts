@@ -37,18 +37,10 @@ function formatZodIssues(error: z.ZodError): string {
     return `${path}: ${issue.message}`;
   });
 
-  const hasOwnerIssue = issues.some(
-    (issue) =>
-      issue.includes("owner") &&
-      (issue.includes("undefined") || issue.includes("Invalid input")),
-  );
+  const hasOwnerIssue = issues.some((issue) => issue.includes("owner") && (issue.includes("undefined") || issue.includes("Invalid input")));
 
   const hasRepoIssue = issues.some(
-    (issue) =>
-      issue.includes("repo") &&
-      (issue.includes("undefined") ||
-        issue.includes("Invalid input") ||
-        issue.includes("must only contain")),
+    (issue) => issue.includes("repo") && (issue.includes("undefined") || issue.includes("Invalid input") || issue.includes("must only contain")),
   );
 
   if (hasOwnerIssue || hasRepoIssue) {
@@ -92,13 +84,9 @@ export function defineTool<TSchema extends z.ZodTypeAny>(config: {
       const parsed = config.input.safeParse(input);
 
       if (!parsed.success) {
-        throw new AppError(
-          `Invalid tool arguments: ${formatZodIssues(parsed.error)}`,
-          400,
-          {
-            cause: parsed.error,
-          },
-        );
+        throw new AppError(`Invalid tool arguments: ${formatZodIssues(parsed.error)}`, 400, {
+          cause: parsed.error,
+        });
       }
 
       try {

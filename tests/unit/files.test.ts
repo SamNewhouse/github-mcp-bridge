@@ -18,9 +18,7 @@ import {
   upsertFile,
 } from "../../src/github/files";
 
-const mockGithubRequest = githubRequest as jest.MockedFunction<
-  typeof githubRequest
->;
+const mockGithubRequest = githubRequest as jest.MockedFunction<typeof githubRequest>;
 
 function makeGitHubFile(content: string, path = "src/example.ts") {
   return {
@@ -34,10 +32,7 @@ function makeGitHubFile(content: string, path = "src/example.ts") {
   };
 }
 
-function makeDirectoryEntry(
-  name: string,
-  type: "file" | "dir" | "symlink" | "submodule" = "file",
-) {
+function makeDirectoryEntry(name: string, type: "file" | "dir" | "symlink" | "submodule" = "file") {
   return {
     type,
     name,
@@ -112,9 +107,7 @@ describe("getFileContents", () => {
       content: "",
     });
 
-    await expect(getFileContents("owner", "repo", "src")).rejects.toThrow(
-      "Path is not a file: src",
-    );
+    await expect(getFileContents("owner", "repo", "src")).rejects.toThrow("Path is not a file: src");
   });
 
   /**
@@ -153,9 +146,7 @@ describe("getFileContents", () => {
  */
 describe("getFileRaw", () => {
   it("returns the decoded raw string content", async () => {
-    mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile("export const value = 1;", "src/value.ts"),
-    );
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("export const value = 1;", "src/value.ts"));
 
     const result = await getFileRaw("owner", "repo", "src/value.ts");
 
@@ -173,9 +164,7 @@ describe("getFileRaw", () => {
       content: "",
     });
 
-    await expect(getFileRaw("owner", "repo", "src")).rejects.toThrow(
-      "Path is not a file: src",
-    );
+    await expect(getFileRaw("owner", "repo", "src")).rejects.toThrow("Path is not a file: src");
   });
 });
 
@@ -206,9 +195,7 @@ describe("getMultipleFiles", () => {
 
   function mockFiles(count: number, content = "export default {};\n") {
     for (let i = 0; i < count; i++) {
-      mockGithubRequest.mockResolvedValueOnce(
-        makeGitHubFile(content, paths[i]!),
-      );
+      mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(content, paths[i]!));
     }
   }
 
@@ -238,13 +225,7 @@ describe("getMultipleFiles", () => {
   it("returns remaining 2 files when cursor: 10 on a 12-file list", async () => {
     mockFiles(2);
 
-    const result = await getMultipleFiles(
-      "owner",
-      "repo",
-      paths,
-      undefined,
-      10,
-    );
+    const result = await getMultipleFiles("owner", "repo", paths, undefined, 10);
 
     expect(result.files).toHaveLength(2);
     expect(result.pagination.hasMore).toBe(false);
@@ -259,9 +240,7 @@ describe("getMultipleFiles", () => {
    */
   it("deduplicates paths before fetching", async () => {
     const duped = ["src/a.ts", "src/a.ts", "src/b.ts", "src/b.ts"];
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("a", "src/a.ts"))
-      .mockResolvedValueOnce(makeGitHubFile("b", "src/b.ts"));
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("a", "src/a.ts")).mockResolvedValueOnce(makeGitHubFile("b", "src/b.ts"));
 
     const result = await getMultipleFiles("owner", "repo", duped);
 
@@ -275,13 +254,7 @@ describe("getMultipleFiles", () => {
    * Asserts 0 files are returned, hasMore is false, and no API call is made.
    */
   it("returns 0 files and hasMore: false when cursor equals total", async () => {
-    const result = await getMultipleFiles(
-      "owner",
-      "repo",
-      ["src/a.ts"],
-      undefined,
-      1,
-    );
+    const result = await getMultipleFiles("owner", "repo", ["src/a.ts"], undefined, 1);
 
     expect(result.files).toHaveLength(0);
     expect(result.pagination.hasMore).toBe(false);
@@ -302,9 +275,7 @@ describe("getMultipleFiles", () => {
 
     const threePaths = ["src/a.ts", "src/b.ts", "src/c.ts"];
 
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile(smallContent, "src/a.ts"))
-      .mockResolvedValueOnce(makeGitHubFile(bigContent, "src/b.ts"));
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(smallContent, "src/a.ts")).mockResolvedValueOnce(makeGitHubFile(bigContent, "src/b.ts"));
 
     const result = await getMultipleFiles("owner", "repo", threePaths);
 
@@ -328,10 +299,7 @@ describe("listDirectory", () => {
    * Asserts the entries are mapped correctly with name, path, sha, size, type.
    */
   it("returns mapped directory entries", async () => {
-    mockGithubRequest.mockResolvedValueOnce([
-      makeDirectoryEntry("index.ts", "file"),
-      makeDirectoryEntry("utils", "dir"),
-    ]);
+    mockGithubRequest.mockResolvedValueOnce([makeDirectoryEntry("index.ts", "file"), makeDirectoryEntry("utils", "dir")]);
 
     const result = await listDirectory("owner", "repo", "src");
 
@@ -353,13 +321,9 @@ describe("listDirectory", () => {
    * with a message identifying the bad path.
    */
   it("throws AppError when the path is a file not a directory", async () => {
-    mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile("content", "src/index.ts"),
-    );
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", "src/index.ts"));
 
-    await expect(
-      listDirectory("owner", "repo", "src/index.ts"),
-    ).rejects.toThrow("Path is not a directory");
+    await expect(listDirectory("owner", "repo", "src/index.ts")).rejects.toThrow("Path is not a directory");
   });
 
   /**
@@ -368,9 +332,7 @@ describe("listDirectory", () => {
    * rather than /contents/ which would 404.
    */
   it("lists the repo root when path is empty", async () => {
-    mockGithubRequest.mockResolvedValueOnce([
-      makeDirectoryEntry("README.md", "file"),
-    ]);
+    mockGithubRequest.mockResolvedValueOnce([makeDirectoryEntry("README.md", "file")]);
 
     await listDirectory("owner", "repo", "");
 
@@ -443,9 +405,7 @@ describe("upsertFile", () => {
    * Asserts created: true is returned.
    */
   it("creates a new file and returns created: true when file does not exist", async () => {
-    mockGithubRequest
-      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
-      .mockResolvedValueOnce(makeUpsertResponse());
+    mockGithubRequest.mockRejectedValueOnce(new AppError("GitHub resource not found", 404)).mockResolvedValueOnce(makeUpsertResponse());
 
     const result = await upsertFile("owner", "repo", upsertInput);
 
@@ -460,9 +420,7 @@ describe("upsertFile", () => {
    * Asserts the PUT body includes the existing sha and created: false is returned.
    */
   it("updates an existing file and returns created: false when file exists", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("old content", upsertInput.path))
-      .mockResolvedValueOnce(makeUpsertResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("old content", upsertInput.path)).mockResolvedValueOnce(makeUpsertResponse());
 
     const result = await upsertFile("owner", "repo", upsertInput);
 
@@ -478,9 +436,7 @@ describe("upsertFile", () => {
    * back to the original string.
    */
   it("base64-encodes the content in the PUT body", async () => {
-    mockGithubRequest
-      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
-      .mockResolvedValueOnce(makeUpsertResponse());
+    mockGithubRequest.mockRejectedValueOnce(new AppError("GitHub resource not found", 404)).mockResolvedValueOnce(makeUpsertResponse());
 
     await upsertFile("owner", "repo", upsertInput);
 
@@ -495,9 +451,7 @@ describe("upsertFile", () => {
    * not POST, which is what the GitHub Contents API requires.
    */
   it("uses the PUT HTTP method", async () => {
-    mockGithubRequest
-      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
-      .mockResolvedValueOnce(makeUpsertResponse());
+    mockGithubRequest.mockRejectedValueOnce(new AppError("GitHub resource not found", 404)).mockResolvedValueOnce(makeUpsertResponse());
 
     await upsertFile("owner", "repo", upsertInput);
 
@@ -510,9 +464,7 @@ describe("upsertFile", () => {
    * sub-objects with the expected fields.
    */
   it("returns file and commit fields in the response", async () => {
-    mockGithubRequest
-      .mockRejectedValueOnce(new AppError("GitHub resource not found", 404))
-      .mockResolvedValueOnce(makeUpsertResponse());
+    mockGithubRequest.mockRejectedValueOnce(new AppError("GitHub resource not found", 404)).mockResolvedValueOnce(makeUpsertResponse());
 
     const result = await upsertFile("owner", "repo", upsertInput);
 
@@ -534,13 +486,9 @@ describe("upsertFile", () => {
    * rather than silently swallowed.
    */
   it("rethrows non-404 errors from the existence check", async () => {
-    mockGithubRequest.mockRejectedValueOnce(
-      new AppError("GitHub request forbidden", 403),
-    );
+    mockGithubRequest.mockRejectedValueOnce(new AppError("GitHub request forbidden", 403));
 
-    await expect(upsertFile("owner", "repo", upsertInput)).rejects.toThrow(
-      "GitHub request forbidden",
-    );
+    await expect(upsertFile("owner", "repo", upsertInput)).rejects.toThrow("GitHub request forbidden");
   });
 });
 
@@ -621,8 +569,7 @@ describe("batchUpsertFiles", () => {
 
     await batchUpsertFiles("owner", "repo", input);
 
-    const firstUrl = (mockGithubRequest as jest.Mock).mock
-      .calls[0][0] as string;
+    const firstUrl = (mockGithubRequest as jest.Mock).mock.calls[0][0] as string;
     expect(firstUrl).toContain("/git/refs/heads/main");
   });
 
@@ -648,8 +595,7 @@ describe("batchUpsertFiles", () => {
 
     await batchUpsertFiles("owner", "repo", input);
 
-    const secondUrl = (mockGithubRequest as jest.Mock).mock
-      .calls[1][0] as string;
+    const secondUrl = (mockGithubRequest as jest.Mock).mock.calls[1][0] as string;
     expect(secondUrl).toContain("/git/commits/base-commit-sha");
   });
 
@@ -681,12 +627,8 @@ describe("batchUpsertFiles", () => {
     const blob1Body = JSON.parse(blob1Options.body);
     const blob2Body = JSON.parse(blob2Options.body);
 
-    expect(Buffer.from(blob1Body.content, "base64").toString("utf8")).toBe(
-      input.files[0]!.content,
-    );
-    expect(Buffer.from(blob2Body.content, "base64").toString("utf8")).toBe(
-      input.files[1]!.content,
-    );
+    expect(Buffer.from(blob1Body.content, "base64").toString("utf8")).toBe(input.files[0]!.content);
+    expect(Buffer.from(blob2Body.content, "base64").toString("utf8")).toBe(input.files[1]!.content);
     expect(blob1Body.encoding).toBe("base64");
     expect(blob2Body.encoding).toBe("base64");
   });
@@ -785,8 +727,7 @@ describe("batchUpsertFiles", () => {
 
     await batchUpsertFiles("owner", "repo", input);
 
-    const updateUrl = (mockGithubRequest as jest.Mock).mock
-      .calls[6][0] as string;
+    const updateUrl = (mockGithubRequest as jest.Mock).mock.calls[6][0] as string;
     const [, updateOptions] = (mockGithubRequest as jest.Mock).mock.calls[6];
     const updateBody = JSON.parse(updateOptions.body);
 
@@ -829,9 +770,7 @@ describe("deleteFile", () => {
    * DELETE), deleted: true is returned, and the commit shape is correct.
    */
   it("returns deleted: true and commit detail when the file exists", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path))
-      .mockResolvedValueOnce(makeDeleteResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path)).mockResolvedValueOnce(makeDeleteResponse());
 
     const result = await deleteFile("owner", "repo", deleteInput);
 
@@ -846,9 +785,7 @@ describe("deleteFile", () => {
    * GET call so GitHub can verify there are no concurrent modifications.
    */
   it("includes the file SHA in the DELETE body", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path))
-      .mockResolvedValueOnce(makeDeleteResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path)).mockResolvedValueOnce(makeDeleteResponse());
 
     await deleteFile("owner", "repo", deleteInput);
 
@@ -862,9 +799,7 @@ describe("deleteFile", () => {
    * not PUT or POST.
    */
   it("uses the DELETE HTTP method", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path))
-      .mockResolvedValueOnce(makeDeleteResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("content", deleteInput.path)).mockResolvedValueOnce(makeDeleteResponse());
 
     await deleteFile("owner", "repo", deleteInput);
 
@@ -887,9 +822,7 @@ describe("deleteFile", () => {
       content: "",
     });
 
-    await expect(deleteFile("owner", "repo", deleteInput)).rejects.toThrow(
-      "Path is not a file",
-    );
+    await expect(deleteFile("owner", "repo", deleteInput)).rejects.toThrow("Path is not a file");
 
     expect(mockGithubRequest).toHaveBeenCalledTimes(1);
   });
@@ -909,9 +842,7 @@ describe("patchFile", () => {
     path: "src/config.ts",
     branch: "main",
     message: "fix: update config",
-    patches: [
-      { op: "replace_once" as const, find: "old text", replace: "new text" },
-    ],
+    patches: [{ op: "replace_once" as const, find: "old text", replace: "new text" }],
   };
 
   function makePatchResponse() {
@@ -936,9 +867,7 @@ describe("patchFile", () => {
    * count, and the PUT body contains the updated content base64-encoded.
    */
   it("returns patched: true and applies replace_once correctly", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("old text here", patchInput.path))
-      .mockResolvedValueOnce(makePatchResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("old text here", patchInput.path)).mockResolvedValueOnce(makePatchResponse());
 
     const result = await patchFile("owner", "repo", patchInput);
 
@@ -957,9 +886,7 @@ describe("patchFile", () => {
    * Asserts the decoded PUT body has both instances replaced.
    */
   it("replaces all occurrences with replace_all op", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("foo foo foo", patchInput.path))
-      .mockResolvedValueOnce(makePatchResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("foo foo foo", patchInput.path)).mockResolvedValueOnce(makePatchResponse());
 
     await patchFile("owner", "repo", {
       ...patchInput,
@@ -977,15 +904,11 @@ describe("patchFile", () => {
    * Asserts the decoded PUT body has the content prepended to the anchor.
    */
   it("inserts content before the anchor with insert_before op", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("anchor line", patchInput.path))
-      .mockResolvedValueOnce(makePatchResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("anchor line", patchInput.path)).mockResolvedValueOnce(makePatchResponse());
 
     await patchFile("owner", "repo", {
       ...patchInput,
-      patches: [
-        { op: "insert_before", anchor: "anchor line", content: "before\n" },
-      ],
+      patches: [{ op: "insert_before", anchor: "anchor line", content: "before\n" }],
     });
 
     const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
@@ -998,15 +921,11 @@ describe("patchFile", () => {
    * insert_after op — content is appended immediately after the anchor.
    */
   it("inserts content after the anchor with insert_after op", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("anchor line", patchInput.path))
-      .mockResolvedValueOnce(makePatchResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("anchor line", patchInput.path)).mockResolvedValueOnce(makePatchResponse());
 
     await patchFile("owner", "repo", {
       ...patchInput,
-      patches: [
-        { op: "insert_after", anchor: "anchor line", content: "\nafter" },
-      ],
+      patches: [{ op: "insert_after", anchor: "anchor line", content: "\nafter" }],
     });
 
     const [, options] = (mockGithubRequest as jest.Mock).mock.calls[1];
@@ -1021,13 +940,9 @@ describe("patchFile", () => {
    * no PUT call is made.
    */
   it("throws AppError when replace_once find text is not found", async () => {
-    mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile("completely different content", patchInput.path),
-    );
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("completely different content", patchInput.path));
 
-    await expect(patchFile("owner", "repo", patchInput)).rejects.toThrow(
-      "replace_once",
-    );
+    await expect(patchFile("owner", "repo", patchInput)).rejects.toThrow("replace_once");
 
     expect(mockGithubRequest).toHaveBeenCalledTimes(1);
   });
@@ -1038,13 +953,9 @@ describe("patchFile", () => {
    */
   it("throws AppError when the file content contains a null byte (binary guard)", async () => {
     const binaryContent = "text\0binary";
-    mockGithubRequest.mockResolvedValueOnce(
-      makeGitHubFile(binaryContent, patchInput.path),
-    );
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile(binaryContent, patchInput.path));
 
-    await expect(patchFile("owner", "repo", patchInput)).rejects.toThrow(
-      "binary file",
-    );
+    await expect(patchFile("owner", "repo", patchInput)).rejects.toThrow("binary file");
 
     expect(mockGithubRequest).toHaveBeenCalledTimes(1);
   });
@@ -1054,9 +965,7 @@ describe("patchFile", () => {
    * GitHub can detect concurrent modifications.
    */
   it("includes the existing file SHA in the PUT body", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("old text", patchInput.path))
-      .mockResolvedValueOnce(makePatchResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("old text", patchInput.path)).mockResolvedValueOnce(makePatchResponse());
 
     await patchFile("owner", "repo", patchInput);
 
@@ -1070,9 +979,7 @@ describe("patchFile", () => {
    * Asserts patchesApplied is 2 and both substitutions are in the PUT body.
    */
   it("applies multiple patches in sequence and returns correct patchesApplied count", async () => {
-    mockGithubRequest
-      .mockResolvedValueOnce(makeGitHubFile("aaa bbb", patchInput.path))
-      .mockResolvedValueOnce(makePatchResponse());
+    mockGithubRequest.mockResolvedValueOnce(makeGitHubFile("aaa bbb", patchInput.path)).mockResolvedValueOnce(makePatchResponse());
 
     const result = await patchFile("owner", "repo", {
       ...patchInput,

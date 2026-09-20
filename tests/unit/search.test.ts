@@ -61,9 +61,7 @@ describe("searchCode", () => {
    * Asserts total_count, incomplete_results, and per-item fields are present.
    */
   it("returns mapped items with fragments from text_matches", async () => {
-    mock.mockResolvedValueOnce(
-      makeCodeSearchResult([{ path: "src/github/files.ts", name: "files.ts" }]),
-    );
+    mock.mockResolvedValueOnce(makeCodeSearchResult([{ path: "src/github/files.ts", name: "files.ts" }]));
 
     const result = await searchCode("owner", "repo", "githubRequest");
 
@@ -135,9 +133,7 @@ describe("searchFiles", () => {
    * Asserts that files not matching the pattern are excluded.
    */
   it("returns only files whose paths contain the pattern", async () => {
-    mock.mockResolvedValueOnce(
-      makeTree(["src/github/files.ts", "src/lib/validation.ts", "README.md"]),
-    );
+    mock.mockResolvedValueOnce(makeTree(["src/github/files.ts", "src/lib/validation.ts", "README.md"]));
 
     const result = await searchFiles("owner", "repo", "github");
 

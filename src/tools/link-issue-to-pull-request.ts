@@ -8,12 +8,6 @@ export const linkIssueToPullRequestTool = defineTool({
     "Links an issue to a pull request by appending a closing keyword (closes/fixes/resolves) and the issue number to the PR body. GitHub will automatically close the issue when the PR is merged.",
   input: linkIssueToPullRequestInputSchema,
   handler: async ({ owner, repo, pull_number, issue_number, keyword }) => ({
-    result: await linkIssueToPullRequest(
-      owner,
-      repo,
-      pull_number,
-      issue_number,
-      keyword,
-    ),
+    result: await linkIssueToPullRequest(owner, repo, pull_number, issue_number, keyword),
   }),
 });

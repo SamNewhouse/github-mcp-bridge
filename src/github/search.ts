@@ -37,15 +37,12 @@ type GitHubTreeResult = {
 
 export async function searchCode(owner: string, repo: string, query: string) {
   const encodedQuery = encodeURIComponent(`${query} repo:${owner}/${repo}`);
-  const result = await githubRequest<GitHubCodeSearchResult>(
-    `/search/code?q=${encodedQuery}&per_page=30`,
-    {
-      headers: {
-        Accept: "application/vnd.github.text-match+json",
-      },
-      owner,
+  const result = await githubRequest<GitHubCodeSearchResult>(`/search/code?q=${encodedQuery}&per_page=30`, {
+    headers: {
+      Accept: "application/vnd.github.text-match+json",
     },
-  );
+    owner,
+  });
 
   return {
     total_count: result.total_count,
@@ -61,23 +58,12 @@ export async function searchCode(owner: string, repo: string, query: string) {
   };
 }
 
-export async function searchFiles(
-  owner: string,
-  repo: string,
-  pattern: string,
-  ref?: string,
-) {
+export async function searchFiles(owner: string, repo: string, pattern: string, ref?: string) {
   const branch = ref ?? "HEAD";
-  const result = await githubRequest<GitHubTreeResult>(
-    `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
-    { owner },
-  );
+  const result = await githubRequest<GitHubTreeResult>(`/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, { owner });
 
   const lowerPattern = pattern.toLowerCase();
-  const matched = result.tree.filter(
-    (item) =>
-      item.type === "blob" && item.path?.toLowerCase().includes(lowerPattern),
-  );
+  const matched = result.tree.filter((item) => item.type === "blob" && item.path?.toLowerCase().includes(lowerPattern));
 
   return {
     truncated: result.truncated,

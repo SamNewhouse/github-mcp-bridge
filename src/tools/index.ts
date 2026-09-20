@@ -77,9 +77,7 @@ const tools = [
   getWorkflowRunTool,
 ] as const;
 
-export const toolDefinitions = Object.fromEntries(
-  tools.map((tool) => [tool.name, tool]),
-) as Record<(typeof tools)[number]["name"], (typeof tools)[number]>;
+export const toolDefinitions = Object.fromEntries(tools.map((tool) => [tool.name, tool])) as Record<(typeof tools)[number]["name"], (typeof tools)[number]>;
 
 export type ToolName = keyof typeof toolDefinitions;
 

@@ -17,10 +17,7 @@ type JsonRpcBody = {
   params?: Record<string, unknown>;
 };
 
-async function postJsonRpc(
-  body: JsonRpcBody,
-  options: { sessionId?: string } = {},
-) {
+async function postJsonRpc(body: JsonRpcBody, options: { sessionId?: string } = {}) {
   return fetch(BASE_URL, {
     method: "POST",
     headers: {
@@ -54,9 +51,7 @@ export async function initializeSession() {
   const newSessionId = initRes.headers.get("mcp-session-id");
 
   if (!initRes.ok || !newSessionId) {
-    throw new Error(
-      `Failed to initialize MCP session: ${initRes.status} ${await initRes.text()}`,
-    );
+    throw new Error(`Failed to initialize MCP session: ${initRes.status} ${await initRes.text()}`);
   }
 
   const initializedRes = await postJsonRpc(
@@ -68,9 +63,7 @@ export async function initializeSession() {
   );
 
   if (initializedRes.status !== 202) {
-    throw new Error(
-      `Expected notifications/initialized to return 202, got ${initializedRes.status}`,
-    );
+    throw new Error(`Expected notifications/initialized to return 202, got ${initializedRes.status}`);
   }
 
   sessionId = newSessionId;
@@ -108,10 +101,7 @@ export async function callTool(name: string, input: Record<string, unknown>) {
   return JSON.parse(json.result.content[0].text);
 }
 
-export async function callToolRaw(
-  name: string,
-  input: Record<string, unknown>,
-) {
+export async function callToolRaw(name: string, input: Record<string, unknown>) {
   const res = await postSessionJsonRpc({
     jsonrpc: "2.0",
     id: jsonRpcId(),

@@ -1,102 +1,19 @@
 import * as http from "node:http";
-import { z } from "zod";
 import { assertAuthorized, getAuthorizedPrincipal } from "./auth";
-import {
-  getClientIp,
-  isRateLimited,
-  recordAuthFailure,
-  recordAuthSuccess,
-} from "./lib/limiter";
+import { runWithRequestContext } from "./github/request-context";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
-import {
-  getRequestUrl,
-  readJsonBody,
-  sendJson,
-  sendJsonRpcError,
-  sendJsonRpcResultWithSession,
-} from "./lib/http";
+import { getRequestUrl, readJsonBody, sendJson, sendJsonRpcError, sendJsonRpcResultWithSession } from "./lib/http";
+import { getClientIp, isRateLimited, recordAuthFailure, recordAuthSuccess } from "./lib/limiter";
 import { createRequestLogger } from "./lib/logging";
-import {
-  createSession,
-  deleteSessionForPrincipal,
-  getSessionIdFromHeaders,
-  touchSessionForPrincipal,
-} from "./lib/session";
+import { RPC_SESSION_REQUIRED, RPC_UNAUTHORIZED, SUPPORTED_PROTOCOL_VERSION, toMcpToolResult } from "./lib/mcp-protocol";
+import { createRequestContext } from "./lib/request-context";
+import { createSession, deleteSessionForPrincipal, getSessionIdFromHeaders, touchSessionForPrincipal } from "./lib/session";
 import { getSplashHtml } from "./splash";
 import { executeTool, getToolList } from "./tools";
-import type { McpToolResult } from "./tools/shared";
-
-const RPC_UNAUTHORIZED = -32001;
-const RPC_SESSION_REQUIRED = -32002;
-const SUPPORTED_PROTOCOL_VERSION = "2025-03-26";
+import { jsonRpcRequestSchema, toolCallParamsSchema } from "./lib/validation";
 
 const CACHED_TOOL_LIST = getToolList();
 const CACHED_TOOL_LIST_RESPONSE = { tools: CACHED_TOOL_LIST };
-
-const jsonRpcRequestSchema = z.object({
-  jsonrpc: z.literal("2.0"),
-  id: z.union([z.string(), z.number(), z.null()]).optional(),
-  method: z.string(),
-  params: z.unknown().optional(),
-});
-
-const toolCallParamsSchema = z.object({
-  name: z.string(),
-  arguments: z.record(z.string(), z.unknown()).default({}),
-});
-
-/**
- * Determines whether a value already has the MCP tool-result shape.
- *
- * @param value - The value to inspect.
- * @returns `true` when the value contains only valid text content items.
- */
-function isMcpToolResult(value: unknown): value is McpToolResult {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-
-  if (!Array.isArray(candidate.content)) {
-    return false;
-  }
-
-  return candidate.content.every((item) => {
-    if (!item || typeof item !== "object") {
-      return false;
-    }
-
-    const contentItem = item as Record<string, unknown>;
-
-    return contentItem.type === "text" && typeof contentItem.text === "string";
-  });
-}
-
-/**
- * Converts a tool result into the MCP tool-result format.
- *
- * Existing MCP results are returned unchanged. Other values are represented
- * as formatted JSON text and exposed through `structuredContent`.
- *
- * @param result - The raw tool result.
- * @returns A normalized MCP tool result.
- */
-function toMcpToolResult(result: unknown): McpToolResult {
-  if (isMcpToolResult(result)) {
-    return result;
-  }
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-    structuredContent: result,
-  };
-}
 
 /**
  * Sends the public splash page response.
@@ -119,35 +36,31 @@ function sendSplashPage(res: http.ServerResponse): void {
 }
 
 /**
- * Resolves the MCP protocol version supported by this server.
+ * Returns the MCP protocol version supported by this server.
  *
  * @param _params - Client-supplied initialization parameters.
- * @returns The supported MCP protocol version.
+ * @returns The supported protocol version.
  */
 function resolveProtocolVersion(_params: unknown): string {
   return SUPPORTED_PROTOCOL_VERSION;
 }
 
 /**
- * Resolves or creates a session for the initialize request.
+ * Resolves an existing valid MCP session or creates a new one.
  *
- * If the client supplied a valid session ID, it is resumed and its idle
- * window is refreshed. Otherwise a new session is created.
+ * The MCP session remains a protocol-level transport concern. It is not used
+ * for cache scoping: the operation cache instead uses principal +
+ * X-Request-Id, which remains stable across the short MCP sessions created by
+ * the connector.
  *
  * @param principal - The authenticated request principal.
- * @param headers - The incoming request headers.
- * @returns Session information used during initialization.
+ * @param headers - Incoming HTTP headers.
+ * @returns The resolved MCP session information.
  */
-async function resolveInitialSession(
-  principal: string,
-  headers: http.IncomingHttpHeaders,
-) {
+async function resolveInitialSession(principal: string, headers: http.IncomingHttpHeaders) {
   const requestedSessionId = getSessionIdFromHeaders(headers);
 
-  if (
-    requestedSessionId !== null &&
-    (await touchSessionForPrincipal(requestedSessionId, principal))
-  ) {
+  if (requestedSessionId !== null && (await touchSessionForPrincipal(requestedSessionId, principal))) {
     return {
       sessionId: requestedSessionId,
       requestedSessionId,
@@ -165,20 +78,13 @@ async function resolveInitialSession(
 }
 
 /**
- * Requires a valid session ID for post-initialization MCP requests.
+ * Requires a valid session for a post-initialize MCP request.
  *
- * Validates the session against the principal and slides its idle expiry
- * forward in a single store round trip.
- *
- * @param principal - The authenticated request principal.
- * @param headers - The incoming request headers.
- * @returns The validated session ID, or null when the session is missing,
- * expired, or belongs to a different principal.
+ * @param principal - The authenticated caller.
+ * @param headers - Incoming HTTP headers.
+ * @returns The valid session ID, or null when it is absent, invalid, or expired.
  */
-async function requireSession(
-  principal: string,
-  headers: http.IncomingHttpHeaders,
-): Promise<string | null> {
+async function requireSession(principal: string, headers: http.IncomingHttpHeaders): Promise<string | null> {
   const sessionId = getSessionIdFromHeaders(headers);
 
   if (!sessionId || !(await touchSessionForPrincipal(sessionId, principal))) {
@@ -191,32 +97,41 @@ async function requireSession(
 /**
  * Handles an incoming MCP HTTP request.
  *
+ * MCP session state validates the transport conversation. The independent
+ * request context is derived from the authenticated caller plus the upstream
+ * X-Request-Id and scopes the temporary Redis GitHub response cache.
+ *
  * @param req - The incoming HTTP request.
  * @param res - The outgoing HTTP response.
- * @returns A promise that resolves when the response has been sent.
  */
-export async function handleMcpRequest(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-) {
+export async function handleMcpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const log = createRequestLogger(req);
 
   try {
     const url = getRequestUrl(req);
 
     if (!url) {
-      log.warn("request_rejected", { reason: "missing_url" });
-      return sendJson(res, 400, { error: "Missing URL" });
+      log.warn("request_rejected", {
+        reason: "missing_url",
+      });
+
+      return sendJson(res, 400, {
+        error: "Missing URL",
+      });
     }
 
     if (url.pathname === "/health") {
       try {
         assertAuthorized(req, log);
       } catch {
-        return sendJson(res, 401, { error: "Unauthorized" });
+        return sendJson(res, 401, {
+          error: "Unauthorized",
+        });
       }
 
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, {
+        ok: true,
+      });
     }
 
     if (url.pathname === "/" && req.method === "HEAD") {
@@ -246,7 +161,9 @@ export async function handleMcpRequest(
         reason: "method_not_allowed",
       });
 
-      return sendJson(res, 405, { error: "Method not allowed" });
+      return sendJson(res, 405, {
+        error: "Method not allowed",
+      });
     }
 
     if (url.pathname !== "/") {
@@ -255,7 +172,9 @@ export async function handleMcpRequest(
         reason: "not_found",
       });
 
-      return sendJson(res, 404, { error: "Not found" });
+      return sendJson(res, 404, {
+        error: "Not found",
+      });
     }
 
     const clientIp = getClientIp(req);
@@ -267,12 +186,7 @@ export async function handleMcpRequest(
         ip: clientIp,
       });
 
-      return sendJsonRpcError(
-        res,
-        null,
-        RPC_UNAUTHORIZED,
-        "Too many failed attempts — try again later",
-      );
+      return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Too many failed attempts — try again later");
     }
 
     let principal: string;
@@ -282,8 +196,11 @@ export async function handleMcpRequest(
       recordAuthSuccess(clientIp);
     } catch {
       recordAuthFailure(clientIp);
+
       return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Unauthorized");
     }
+
+    const requestContext = createRequestContext(req.headers, principal);
 
     if (req.method === "DELETE") {
       const sessionId = getSessionIdFromHeaders(req.headers);
@@ -291,9 +208,12 @@ export async function handleMcpRequest(
       if (!sessionId) {
         log.warn("session_delete_rejected", {
           reason: "missing_session_id",
+          requestId: requestContext?.requestId ?? null,
         });
 
-        return sendJson(res, 400, { error: "Missing MCP session ID" });
+        return sendJson(res, 400, {
+          error: "Missing MCP session ID",
+        });
       }
 
       const deleted = await deleteSessionForPrincipal(sessionId, principal);
@@ -302,13 +222,17 @@ export async function handleMcpRequest(
         log.warn("session_delete_rejected", {
           reason: "invalid_or_expired_session",
           sessionId,
+          requestId: requestContext?.requestId ?? null,
         });
 
-        return sendJson(res, 404, { error: "Session not found" });
+        return sendJson(res, 404, {
+          error: "Session not found",
+        });
       }
 
       log.info("mcp_session_deleted", {
         sessionId,
+        requestId: requestContext?.requestId ?? null,
       });
 
       res.statusCode = 204;
@@ -324,7 +248,9 @@ export async function handleMcpRequest(
         reason: "method_not_allowed",
       });
 
-      return sendJson(res, 405, { error: "Method not allowed" });
+      return sendJson(res, 405, {
+        error: "Method not allowed",
+      });
     }
 
     const rawBody = await readJsonBody(req);
@@ -333,6 +259,7 @@ export async function handleMcpRequest(
     if (!parsed.success) {
       log.warn("jsonrpc_invalid_request", {
         issues: parsed.error.issues,
+        requestId: requestContext?.requestId ?? null,
       });
 
       return sendJsonRpcError(
@@ -340,7 +267,9 @@ export async function handleMcpRequest(
         null,
         -32600,
         "Invalid Request",
-        { issues: parsed.error.issues },
+        {
+          issues: parsed.error.issues,
+        },
         400,
       );
     }
@@ -351,28 +280,28 @@ export async function handleMcpRequest(
       const session = await resolveInitialSession(principal, req.headers);
       const protocolVersion = resolveProtocolVersion(body.params);
 
-      const logData = {
+      log.info("mcp_session_initialized", {
         id: body.id ?? null,
         sessionId: session.sessionId,
+        requestId: requestContext?.requestId ?? null,
         protocolVersion,
         resumed: !session.autoResumed,
         requestedSessionId: session.requestedSessionId,
         autoResumed: session.autoResumed,
-      };
-
-      if (session.autoResumed) {
-        (log as any).debug?.("mcp_session_auto_resumed", logData);
-      } else {
-        log.info("mcp_session_initialized", logData);
-      }
+      });
 
       return sendJsonRpcResultWithSession(
         res,
         body.id ?? null,
         {
           protocolVersion,
-          capabilities: { tools: {} },
-          serverInfo: { name: "github-mcp-bridge", version: "0.1.0" },
+          capabilities: {
+            tools: {},
+          },
+          serverInfo: {
+            name: "github-mcp-bridge",
+            version: "0.1.0",
+          },
         },
         session.sessionId,
       );
@@ -384,18 +313,12 @@ export async function handleMcpRequest(
       log.warn("mcp_session_required", {
         id: body.id ?? null,
         method: body.method,
+        requestId: requestContext?.requestId ?? null,
       });
 
-      return sendJsonRpcError(
-        res,
-        body.id ?? null,
-        RPC_SESSION_REQUIRED,
-        "MCP session required",
-        {
-          message:
-            "Call initialize first and include the returned Mcp-Session-Id header.",
-        },
-      );
+      return sendJsonRpcError(res, body.id ?? null, RPC_SESSION_REQUIRED, "MCP session required", {
+        message: "Call initialize first and include the returned Mcp-Session-Id header.",
+      });
     }
 
     if (body.method === "ping") {
@@ -413,18 +336,12 @@ export async function handleMcpRequest(
       log.info("tools_list_requested", {
         id: body.id ?? null,
         sessionId,
-        clientSuppliedValidSession: true,
-        autoResumed: false,
+        requestId: requestContext?.requestId ?? null,
         toolCount: CACHED_TOOL_LIST.length,
         toolNames: CACHED_TOOL_LIST.map((tool) => tool.name),
       });
 
-      return sendJsonRpcResultWithSession(
-        res,
-        body.id ?? null,
-        CACHED_TOOL_LIST_RESPONSE,
-        sessionId,
-      );
+      return sendJsonRpcResultWithSession(res, body.id ?? null, CACHED_TOOL_LIST_RESPONSE, sessionId);
     }
 
     if (body.method === "tools/call") {
@@ -436,6 +353,7 @@ export async function handleMcpRequest(
           method: body.method,
           issues: params.error.issues,
           sessionId,
+          requestId: requestContext?.requestId ?? null,
         });
 
         return sendJsonRpcError(
@@ -443,7 +361,9 @@ export async function handleMcpRequest(
           body.id ?? null,
           -32602,
           "Invalid params",
-          { issues: params.error.issues },
+          {
+            issues: params.error.issues,
+          },
           400,
         );
       }
@@ -452,15 +372,11 @@ export async function handleMcpRequest(
       const toolArgs = params.data.arguments;
 
       try {
-        const result = await executeTool(toolName, toolArgs);
+        const result = await runWithRequestContext(requestContext, () => executeTool(toolName, toolArgs));
+
         const mcpResult = toMcpToolResult(result);
 
-        return sendJsonRpcResultWithSession(
-          res,
-          body.id ?? null,
-          mcpResult,
-          sessionId,
-        );
+        return sendJsonRpcResultWithSession(res, body.id ?? null, mcpResult, sessionId);
       } catch (error) {
         const status = getErrorStatus(error);
         const message = getErrorMessage(error);
@@ -471,6 +387,7 @@ export async function handleMcpRequest(
           status,
           message,
           sessionId,
+          requestId: requestContext?.requestId ?? null,
           errorName: error instanceof Error ? error.name : "UnknownError",
         });
 
@@ -480,28 +397,25 @@ export async function handleMcpRequest(
             body.id ?? null,
             -32602,
             "Invalid params",
-            { tool: toolName, message },
+            {
+              tool: toolName,
+              message,
+            },
             400,
           );
         }
 
         if (status === 401) {
-          return sendJsonRpcError(
-            res,
-            body.id ?? null,
-            RPC_UNAUTHORIZED,
-            "Unauthorized",
-            { tool: toolName, message },
-          );
+          return sendJsonRpcError(res, body.id ?? null, RPC_UNAUTHORIZED, "Unauthorized", {
+            tool: toolName,
+            message,
+          });
         }
 
-        return sendJsonRpcError(
-          res,
-          body.id ?? null,
-          -32603,
-          "Internal error",
-          { tool: toolName, message },
-        );
+        return sendJsonRpcError(res, body.id ?? null, -32603, "Internal error", {
+          tool: toolName,
+          message,
+        });
       }
     }
 
@@ -509,6 +423,7 @@ export async function handleMcpRequest(
       id: body.id ?? null,
       method: body.method,
       sessionId,
+      requestId: requestContext?.requestId ?? null,
     });
 
     return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
@@ -524,6 +439,8 @@ export async function handleMcpRequest(
       errorName: error instanceof Error ? error.name : "UnknownError",
     });
 
-    return sendJsonRpcError(res, null, -32603, "Internal error", { message });
+    return sendJsonRpcError(res, null, -32603, "Internal error", {
+      message,
+    });
   }
 }

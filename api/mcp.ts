@@ -7,9 +7,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleMcpRequest } from "../src/router";
 
-export default async function handler(
-  req: IncomingMessage,
-  res: ServerResponse,
-) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   return handleMcpRequest(req, res);
 }
