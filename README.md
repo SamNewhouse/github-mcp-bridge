@@ -102,7 +102,7 @@ Add the generated value to Vercel as `CONNECTOR_SECRET`. This exact value become
 
 Push the branch to GitHub or deploy from the Vercel dashboard.
 
-The deployment uses Upstash Redis for session continuity across Vercel’s serverless instances. Local development and CI use in-memory sessions and do not contact Redis.
+The deployment uses Upstash Redis for session continuity across Vercel's serverless instances. Local development and CI use in-memory sessions and do not contact Redis.
 
 ## Sessions
 
@@ -157,9 +157,9 @@ The bridge currently exposes **37 tools**. Call `tools/list` to obtain the autho
 | `list_pull_request_files`    | List files changed by a pull request                       |
 | `list_pull_request_comments` | List pull request conversation comments                    |
 | `get_pull_request_reviews`   | List pull request reviews                                  |
-| `get_pull_request_diff`      | Get a pull request’s unified diff                          |
+| `get_pull_request_diff`      | Get a pull request's unified diff                          |
 | `create_pull_request`        | Create a pull request                                      |
-| `update_pull_request`        | Update a pull request’s title, body, state, or base branch |
+| `update_pull_request`        | Update a pull request's title, body, state, or base branch |
 | `add_pull_request_comment`   | Add a conversation comment to a pull request               |
 
 ### Issues
@@ -169,7 +169,7 @@ The bridge currently exposes **37 tools**. Call `tools/list` to obtain the autho
 | `list_issues`                | List issues by state, excluding pull requests               |
 | `get_issue`                  | Get issue details                                           |
 | `create_issue`               | Create an issue                                             |
-| `update_issue`               | Update an issue’s title, body, state, labels, or assignees  |
+| `update_issue`               | Update an issue's title, body, state, labels, or assignees  |
 | `link_issue_to_pull_request` | Add a closing keyword that links an issue to a pull request |
 | `list_issue_comments`        | List comments on an issue                                   |
 | `add_issue_comment`          | Add a comment to an issue                                   |
@@ -279,3 +279,7 @@ The project currently has 19 test suites and 238 passing tests.
 ## License
 
 MIT
+
+---
+
+**Note:** This line was added during MCP Bridge tooling test on 2026-09-20.
