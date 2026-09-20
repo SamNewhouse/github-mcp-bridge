@@ -49,15 +49,8 @@ type GitHubUpdateIssueInput = {
   assignees?: string[];
 };
 
-export async function listIssues(
-  owner: string,
-  repo: string,
-  state: "open" | "closed" | "all" = "open",
-) {
-  const issues = await githubRequest<GitHubIssue[]>(
-    `/repos/${owner}/${repo}/issues?state=${state}&per_page=100`,
-    { owner },
-  );
+export async function listIssues(owner: string, repo: string, state: "open" | "closed" | "all" = "open") {
+  const issues = await githubRequest<GitHubIssue[]>(`/repos/${owner}/${repo}/issues?state=${state}&per_page=100`, { owner });
 
   return issues
     .filter((issue) => !issue.pull_request)
@@ -75,15 +68,8 @@ export async function listIssues(
     }));
 }
 
-export async function getIssue(
-  owner: string,
-  repo: string,
-  issue_number: number,
-) {
-  const issue = await githubRequest<GitHubIssue>(
-    `/repos/${owner}/${repo}/issues/${issue_number}`,
-    { owner },
-  );
+export async function getIssue(owner: string, repo: string, issue_number: number) {
+  const issue = await githubRequest<GitHubIssue>(`/repos/${owner}/${repo}/issues/${issue_number}`, { owner });
 
   if (issue.pull_request) {
     throw new AppError("Requested number is a pull request, not an issue", 400);
@@ -104,25 +90,18 @@ export async function getIssue(
   };
 }
 
-export async function createIssue(
-  owner: string,
-  repo: string,
-  input: GitHubCreateIssueInput,
-) {
-  const issue = await githubRequest<GitHubIssue>(
-    `/repos/${owner}/${repo}/issues`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: input.title,
-        body: input.body ?? "",
-        ...(input.labels ? { labels: input.labels } : {}),
-        ...(input.assignees ? { assignees: input.assignees } : {}),
-      }),
-      owner,
-    },
-  );
+export async function createIssue(owner: string, repo: string, input: GitHubCreateIssueInput) {
+  const issue = await githubRequest<GitHubIssue>(`/repos/${owner}/${repo}/issues`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: input.title,
+      body: input.body ?? "",
+      ...(input.labels ? { labels: input.labels } : {}),
+      ...(input.assignees ? { assignees: input.assignees } : {}),
+    }),
+    owner,
+  });
 
   return {
     number: issue.number,
@@ -138,12 +117,7 @@ export async function createIssue(
   };
 }
 
-export async function updateIssue(
-  owner: string,
-  repo: string,
-  issue_number: number,
-  input: GitHubUpdateIssueInput,
-) {
+export async function updateIssue(owner: string, repo: string, issue_number: number, input: GitHubUpdateIssueInput) {
   const payload: Record<string, unknown> = {};
 
   if (input.title !== undefined) payload.title = input.title;
@@ -156,15 +130,12 @@ export async function updateIssue(
     throw new AppError("No update fields provided", 400);
   }
 
-  const issue = await githubRequest<GitHubIssue>(
-    `/repos/${owner}/${repo}/issues/${issue_number}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      owner,
-    },
-  );
+  const issue = await githubRequest<GitHubIssue>(`/repos/${owner}/${repo}/issues/${issue_number}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    owner,
+  });
 
   return {
     number: issue.number,
@@ -187,18 +158,12 @@ export async function linkIssueToPullRequest(
   issue_number: number,
   keyword: "closes" | "fixes" | "resolves" = "closes",
 ) {
-  const pr = await githubRequest<{ body: string | null; number: number }>(
-    `/repos/${owner}/${repo}/pulls/${pull_number}`,
-    { owner },
-  );
+  const pr = await githubRequest<{ body: string | null; number: number }>(`/repos/${owner}/${repo}/pulls/${pull_number}`, { owner });
 
   const linkText = `\n\n${keyword} #${issue_number}`;
   const currentBody = pr.body ?? "";
 
-  const alreadyLinked = new RegExp(
-    `(closes|fixes|resolves)\\s+#${issue_number}`,
-    "i",
-  ).test(currentBody);
+  const alreadyLinked = new RegExp(`(closes|fixes|resolves)\\s+#${issue_number}`, "i").test(currentBody);
 
   if (alreadyLinked) {
     return {
@@ -224,15 +189,8 @@ export async function linkIssueToPullRequest(
   };
 }
 
-export async function listIssueComments(
-  owner: string,
-  repo: string,
-  issue_number: number,
-) {
-  const comments = await githubRequest<GitHubIssueComment[]>(
-    `/repos/${owner}/${repo}/issues/${issue_number}/comments?per_page=100`,
-    { owner },
-  );
+export async function listIssueComments(owner: string, repo: string, issue_number: number) {
+  const comments = await githubRequest<GitHubIssueComment[]>(`/repos/${owner}/${repo}/issues/${issue_number}/comments?per_page=100`, { owner });
 
   return comments.map((c) => ({
     id: c.id,
@@ -244,21 +202,13 @@ export async function listIssueComments(
   }));
 }
 
-export async function addIssueComment(
-  owner: string,
-  repo: string,
-  issue_number: number,
-  body: string,
-) {
-  const comment = await githubRequest<GitHubIssueComment>(
-    `/repos/${owner}/${repo}/issues/${issue_number}/comments`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body }),
-      owner,
-    },
-  );
+export async function addIssueComment(owner: string, repo: string, issue_number: number, body: string) {
+  const comment = await githubRequest<GitHubIssueComment>(`/repos/${owner}/${repo}/issues/${issue_number}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+    owner,
+  });
 
   return {
     id: comment.id,

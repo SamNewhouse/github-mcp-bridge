@@ -3,11 +3,7 @@ import { AppError } from "./errors";
 
 const MAX_BODY_SIZE_BYTES = 1024 * 1024;
 
-export function sendJson(
-  res: http.ServerResponse,
-  status: number,
-  body: unknown,
-): void {
+export function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.end(JSON.stringify(body));
@@ -86,11 +82,7 @@ export function getRequestUrl(req: http.IncomingMessage): URL | null {
 
 export type JsonRpcId = string | number | null | undefined;
 
-export function sendJsonRpcResult(
-  res: http.ServerResponse,
-  id: JsonRpcId,
-  result: unknown,
-): void {
+export function sendJsonRpcResult(res: http.ServerResponse, id: JsonRpcId, result: unknown): void {
   sendJson(res, 200, {
     jsonrpc: "2.0",
     id: id ?? null,
@@ -98,24 +90,12 @@ export function sendJsonRpcResult(
   });
 }
 
-export function sendJsonRpcResultWithSession(
-  res: http.ServerResponse,
-  id: JsonRpcId,
-  result: unknown,
-  sessionId: string,
-): void {
+export function sendJsonRpcResultWithSession(res: http.ServerResponse, id: JsonRpcId, result: unknown, sessionId: string): void {
   res.setHeader("mcp-session-id", sessionId);
   sendJsonRpcResult(res, id, result);
 }
 
-export function sendJsonRpcError(
-  res: http.ServerResponse,
-  id: JsonRpcId,
-  code: number,
-  message: string,
-  data?: unknown,
-  httpStatus = 200,
-): void {
+export function sendJsonRpcError(res: http.ServerResponse, id: JsonRpcId, code: number, message: string, data?: unknown, httpStatus = 200): void {
   sendJson(res, httpStatus, {
     jsonrpc: "2.0",
     id: id ?? null,

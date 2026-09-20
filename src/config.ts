@@ -6,13 +6,7 @@ const envSchema = z.object({
   // Default PAT used when no owner-specific PAT is configured.
   GITHUB_PAT: z.string().trim().min(1, "GITHUB_PAT is required"),
 
-  CONNECTOR_SECRET: z
-    .string()
-    .trim()
-    .min(
-      32,
-      "CONNECTOR_SECRET must be at least 32 characters — generate one with: openssl rand -hex 32",
-    ),
+  CONNECTOR_SECRET: z.string().trim().min(32, "CONNECTOR_SECRET must be at least 32 characters — generate one with: openssl rand -hex 32"),
 
   PORT: z.coerce.number().int().positive().default(3000),
 });

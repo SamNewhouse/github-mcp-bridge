@@ -66,24 +66,14 @@ function mapRun(run: GitHubWorkflowRun) {
   };
 }
 
-export async function listWorkflowRuns(
-  owner: string,
-  repo: string,
-  branch?: string,
-  event?: string,
-  status?: string,
-  perPage = 30,
-) {
+export async function listWorkflowRuns(owner: string, repo: string, branch?: string, event?: string, status?: string, perPage = 30) {
   const params = new URLSearchParams();
   if (branch) params.set("branch", branch);
   if (event) params.set("event", event);
   if (status) params.set("status", status);
   params.set("per_page", String(perPage));
 
-  const data = await githubRequest<GitHubListWorkflowRunsResponse>(
-    `/repos/${owner}/${repo}/actions/runs?${params.toString()}`,
-    { owner },
-  );
+  const data = await githubRequest<GitHubListWorkflowRunsResponse>(`/repos/${owner}/${repo}/actions/runs?${params.toString()}`, { owner });
 
   return {
     total_count: data.total_count,
@@ -91,20 +81,10 @@ export async function listWorkflowRuns(
   };
 }
 
-export async function getWorkflowRun(
-  owner: string,
-  repo: string,
-  runId: number,
-) {
-  const run = await githubRequest<GitHubWorkflowRun>(
-    `/repos/${owner}/${repo}/actions/runs/${runId}`,
-    { owner },
-  );
+export async function getWorkflowRun(owner: string, repo: string, runId: number) {
+  const run = await githubRequest<GitHubWorkflowRun>(`/repos/${owner}/${repo}/actions/runs/${runId}`, { owner });
 
-  const jobsData = await githubRequest<GitHubJobsResponse>(
-    `/repos/${owner}/${repo}/actions/runs/${runId}/jobs?per_page=100`,
-    { owner },
-  );
+  const jobsData = await githubRequest<GitHubJobsResponse>(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs?per_page=100`, { owner });
 
   return {
     ...mapRun(run),

@@ -17,10 +17,7 @@ type ParseEnvOptions = {
   source?: Record<string, string | undefined>;
 };
 
-export function parseEnv<T extends z.ZodTypeAny>(
-  schema: T,
-  options: ParseEnvOptions = {},
-): z.infer<T> {
+export function parseEnv<T extends z.ZodTypeAny>(schema: T, options: ParseEnvOptions = {}): z.infer<T> {
   loadEnvFile();
 
   const source = options.source ?? process.env;

@@ -1,12 +1,5 @@
 import { beforeEach, describe, expect, test } from "@jest/globals";
-import {
-  callTool,
-  initializeSession,
-  OWNER,
-  postSessionJsonRpc,
-  REPO,
-  resetSession,
-} from "./helpers";
+import { callTool, initializeSession, OWNER, postSessionJsonRpc, REPO, resetSession } from "./helpers";
 
 describe("smoke", () => {
   beforeEach(() => {

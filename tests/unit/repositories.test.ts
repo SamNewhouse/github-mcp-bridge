@@ -109,11 +109,7 @@ describe("listRepositories", () => {
    * not just the first.
    */
   it("maps all repositories in the response", async () => {
-    mock.mockResolvedValueOnce([
-      makeRepo({ id: 1, name: "repo-a" }),
-      makeRepo({ id: 2, name: "repo-b" }),
-      makeRepo({ id: 3, name: "repo-c" }),
-    ]);
+    mock.mockResolvedValueOnce([makeRepo({ id: 1, name: "repo-a" }), makeRepo({ id: 2, name: "repo-b" }), makeRepo({ id: 3, name: "repo-c" })]);
 
     const result = await listRepositories();
 
@@ -178,9 +174,7 @@ describe("getRepository", () => {
    * Asserts both fields are preserved as null in the mapped output.
    */
   it("preserves null description and language", async () => {
-    mock.mockResolvedValueOnce(
-      makeFullRepo({ description: null, language: null }),
-    );
+    mock.mockResolvedValueOnce(makeFullRepo({ description: null, language: null }));
 
     const result = await getRepository("alice", "my-repo");
 

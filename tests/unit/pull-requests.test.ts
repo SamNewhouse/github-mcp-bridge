@@ -69,12 +69,7 @@ describe("addPullRequestComment", () => {
   it("maps created PR comment fields correctly", async () => {
     mock.mockResolvedValueOnce(makeComment());
 
-    const result = await addPullRequestComment(
-      "owner",
-      "repo",
-      10,
-      "Looks good!",
-    );
+    const result = await addPullRequestComment("owner", "repo", 10, "Looks good!");
 
     expect(result).toMatchObject({
       id: 55,
@@ -233,10 +228,7 @@ describe("listPullRequests", () => {
    * Asserts draft is present in each mapped PR.
    */
   it("includes draft field in each mapped PR", async () => {
-    mock.mockResolvedValueOnce([
-      makePR({ draft: false }),
-      makePR({ draft: true, number: 11 }),
-    ]);
+    mock.mockResolvedValueOnce([makePR({ draft: false }), makePR({ draft: true, number: 11 })]);
 
     const result = await listPullRequests("owner", "repo", "all");
 
@@ -359,8 +351,7 @@ describe("getPullRequestDiff", () => {
    * is the string returned by the GitHub diff endpoint.
    */
   it("returns pull_number and diff string", async () => {
-    const rawDiff =
-      "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new";
+    const rawDiff = "diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new";
     mock.mockResolvedValueOnce(rawDiff);
 
     const result = await getPullRequestDiff("owner", "repo", 10);
@@ -534,10 +525,7 @@ describe("getPullRequestReviews", () => {
    * Asserts all reviews are returned in order.
    */
   it("returns all reviews in the order GitHub returns them", async () => {
-    mock.mockResolvedValueOnce([
-      makeReview({ id: 1, state: "CHANGES_REQUESTED" }),
-      makeReview({ id: 2, state: "APPROVED" }),
-    ]);
+    mock.mockResolvedValueOnce([makeReview({ id: 1, state: "CHANGES_REQUESTED" }), makeReview({ id: 2, state: "APPROVED" })]);
 
     const result = await getPullRequestReviews("owner", "repo", 10);
 
@@ -623,9 +611,7 @@ describe("updatePullRequest", () => {
    * and the GitHub PATCH endpoint is never called.
    */
   it("throws AppError when no update fields are provided", async () => {
-    await expect(updatePullRequest("owner", "repo", 10, {})).rejects.toThrow(
-      "No update fields provided",
-    );
+    await expect(updatePullRequest("owner", "repo", 10, {})).rejects.toThrow("No update fields provided");
     expect(mock).not.toHaveBeenCalled();
   });
 
@@ -771,11 +757,7 @@ describe("listPullRequestFiles", () => {
    * Asserts truncated is false and all files are mapped correctly.
    */
   it("returns truncated: false when fewer than 100 files are returned", async () => {
-    mock.mockResolvedValueOnce([
-      makeFile("a.ts"),
-      makeFile("b.ts"),
-      makeFile("c.ts"),
-    ]);
+    mock.mockResolvedValueOnce([makeFile("a.ts"), makeFile("b.ts"), makeFile("c.ts")]);
 
     const result = await listPullRequestFiles("owner", "repo", 10);
 
@@ -790,9 +772,7 @@ describe("listPullRequestFiles", () => {
    * Asserts truncated: true so callers know the list may be incomplete.
    */
   it("returns truncated: true when exactly 100 files are returned", async () => {
-    mock.mockResolvedValueOnce(
-      Array.from({ length: 100 }, (_, i) => makeFile(`file-${i}.ts`)),
-    );
+    mock.mockResolvedValueOnce(Array.from({ length: 100 }, (_, i) => makeFile(`file-${i}.ts`)));
 
     const result = await listPullRequestFiles("owner", "repo", 10);
 

@@ -13,14 +13,8 @@ let redisClient: Redis | null = null;
 
 function redis(): Redis {
   if (!redisClient) {
-    const url =
-      process.env.UPSTASH_REDIS_KV_REST_API_URL ??
-      process.env.KV_REST_API_URL ??
-      process.env.UPSTASH_REDIS_REST_URL;
-    const token =
-      process.env.UPSTASH_REDIS_KV_REST_API_TOKEN ??
-      process.env.KV_REST_API_TOKEN ??
-      process.env.UPSTASH_REDIS_REST_TOKEN;
+    const url = process.env.UPSTASH_REDIS_KV_REST_API_URL ?? process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.UPSTASH_REDIS_KV_REST_API_TOKEN ?? process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 
     if (!url || !token) {
       // No Redis credentials - use in-memory
@@ -45,10 +39,7 @@ function redis(): Redis {
 const key = (sessionId: string) => `mcp:session:${sessionId}`;
 
 // In-memory store for local/CI
-const memorySessions = new Map<
-  string,
-  { record: SessionRecord; expiresAt: number; maxLifetimeExpiresAt: number }
->();
+const memorySessions = new Map<string, { record: SessionRecord; expiresAt: number; maxLifetimeExpiresAt: number }>();
 
 /** Creates a session that expires after the idle TTL (capped by max TTL). */
 export async function createSession(principal: string): Promise<string> {
@@ -83,10 +74,7 @@ export const getOrCreateSessionForPrincipal = createSession;
  * Validates a session for a principal and, if valid, slides the idle expiry
  * forward without ever exceeding the maximum lifetime.
  */
-export async function touchSessionForPrincipal(
-  sessionId: string,
-  principal: string,
-): Promise<boolean> {
+export async function touchSessionForPrincipal(sessionId: string, principal: string): Promise<boolean> {
   const client = redis();
 
   if (!client) {
@@ -131,18 +119,12 @@ export async function touchSessionForPrincipal(
     return false;
   }
 
-  await client.pexpire(
-    key(sessionId),
-    Math.min(getMcpSessionIdleTtlMs(), remainingMax),
-  );
+  await client.pexpire(key(sessionId), Math.min(getMcpSessionIdleTtlMs(), remainingMax));
 
   return true;
 }
 
-export async function deleteSessionForPrincipal(
-  sessionId: string,
-  principal: string,
-): Promise<boolean> {
+export async function deleteSessionForPrincipal(sessionId: string, principal: string): Promise<boolean> {
   const client = redis();
 
   if (!client) {
@@ -165,9 +147,7 @@ export async function deleteSessionForPrincipal(
   return (await client.del(key(sessionId))) > 0;
 }
 
-export function getSessionIdFromHeaders(
-  headers: http.IncomingHttpHeaders,
-): string | null {
+export function getSessionIdFromHeaders(headers: http.IncomingHttpHeaders): string | null {
   const value = headers["mcp-session-id"];
   const first = Array.isArray(value) ? value[0] : value;
   const trimmed = first?.trim();

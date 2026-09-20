@@ -3,15 +3,7 @@ jest.mock("../../src/github/client", () => ({
 }));
 
 import { githubRequest } from "../../src/github/client";
-import {
-  listIssues,
-  getIssue,
-  createIssue,
-  updateIssue,
-  linkIssueToPullRequest,
-  listIssueComments,
-  addIssueComment,
-} from "../../src/github/issues";
+import { listIssues, getIssue, createIssue, updateIssue, linkIssueToPullRequest, listIssueComments, addIssueComment } from "../../src/github/issues";
 
 const mock = githubRequest as jest.MockedFunction<typeof githubRequest>;
 
@@ -50,11 +42,7 @@ describe("listIssues", () => {
    * from the returned array so only true issues remain.
    */
   it("filters out pull requests from the response", async () => {
-    mock.mockResolvedValueOnce([
-      makeIssue({ number: 1 }),
-      makeIssue({ number: 2, pull_request: { url: "..." } }),
-      makeIssue({ number: 3 }),
-    ]);
+    mock.mockResolvedValueOnce([makeIssue({ number: 1 }), makeIssue({ number: 2, pull_request: { url: "..." } }), makeIssue({ number: 3 })]);
 
     const result = await listIssues("owner", "repo");
 
@@ -135,9 +123,7 @@ describe("getIssue", () => {
   it("throws AppError when the number belongs to a pull request", async () => {
     mock.mockResolvedValueOnce(makeIssue({ pull_request: { url: "..." } }));
 
-    await expect(getIssue("owner", "repo", 1)).rejects.toThrow(
-      "Requested number is a pull request, not an issue",
-    );
+    await expect(getIssue("owner", "repo", 1)).rejects.toThrow("Requested number is a pull request, not an issue");
   });
 
   /**
@@ -183,9 +169,7 @@ describe("updateIssue", () => {
    * is thrown and no API call is made.
    */
   it("throws AppError when no update fields are provided", async () => {
-    await expect(updateIssue("owner", "repo", 1, {})).rejects.toThrow(
-      "No update fields provided",
-    );
+    await expect(updateIssue("owner", "repo", 1, {})).rejects.toThrow("No update fields provided");
     expect(mock).not.toHaveBeenCalled();
   });
 
@@ -291,9 +275,7 @@ describe("linkIssueToPullRequest", () => {
    * Asserts the PATCH body contains "fixes #5" (not "closes").
    */
   it("uses the supplied keyword in the appended text", async () => {
-    mock
-      .mockResolvedValueOnce({ number: 10, body: "" })
-      .mockResolvedValueOnce({});
+    mock.mockResolvedValueOnce({ number: 10, body: "" }).mockResolvedValueOnce({});
 
     await linkIssueToPullRequest("owner", "repo", 10, 5, "fixes");
 
@@ -307,9 +289,7 @@ describe("linkIssueToPullRequest", () => {
    * "null #5", preventing a malformed PR body.
    */
   it("treats a null PR body as empty string when appending", async () => {
-    mock
-      .mockResolvedValueOnce({ number: 10, body: null })
-      .mockResolvedValueOnce({});
+    mock.mockResolvedValueOnce({ number: 10, body: null }).mockResolvedValueOnce({});
 
     await linkIssueToPullRequest("owner", "repo", 10, 5);
 
@@ -323,9 +303,7 @@ describe("linkIssueToPullRequest", () => {
    * Asserts the PATCH body contains "resolves #5".
    */
   it("supports the 'resolves' keyword", async () => {
-    mock
-      .mockResolvedValueOnce({ number: 10, body: "" })
-      .mockResolvedValueOnce({});
+    mock.mockResolvedValueOnce({ number: 10, body: "" }).mockResolvedValueOnce({});
 
     await linkIssueToPullRequest("owner", "repo", 10, 5, "resolves");
 
@@ -470,9 +448,6 @@ describe("createIssue", () => {
 
     const result = await createIssue("owner", "repo", { title: "Bug" });
 
-    expect(result).toHaveProperty(
-      "html_url",
-      "https://github.com/owner/repo/issues/1",
-    );
+    expect(result).toHaveProperty("html_url", "https://github.com/owner/repo/issues/1");
   });
 });

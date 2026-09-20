@@ -73,12 +73,7 @@ describe("get_file_contents (integration)", () => {
 });
 
 describe("get_multiple_files (integration)", () => {
-  const KNOWN_PATHS = [
-    "src/github/files.ts",
-    "src/lib/validation.ts",
-    "src/tools/get-file-contents.ts",
-    "src/tools/get-multiple-files.ts",
-  ];
+  const KNOWN_PATHS = ["src/github/files.ts", "src/lib/validation.ts", "src/tools/get-file-contents.ts", "src/tools/get-multiple-files.ts"];
 
   /**
    * All files under pageSize — 4 known paths with the default pageSize of 10.
@@ -161,12 +156,7 @@ describe("get_multiple_files (integration)", () => {
     const result = await callTool("get_multiple_files", {
       owner: OWNER,
       repo: REPO,
-      paths: [
-        "src/github/files.ts",
-        "src/github/files.ts",
-        "src/lib/validation.ts",
-        "src/lib/validation.ts",
-      ],
+      paths: ["src/github/files.ts", "src/github/files.ts", "src/lib/validation.ts", "src/lib/validation.ts"],
     });
 
     expect(result.files).toHaveLength(2);

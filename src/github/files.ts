@@ -102,21 +102,11 @@ function buildContentsPath(path: string, ref?: string): string {
 
 function decodeFileContent(file: GitHubContentFile): string {
   const normalized = file.content.replace(/\n/g, "");
-  return file.encoding === "base64"
-    ? Buffer.from(normalized, "base64").toString("utf8")
-    : file.content;
+  return file.encoding === "base64" ? Buffer.from(normalized, "base64").toString("utf8") : file.content;
 }
 
-export async function getFileContents(
-  owner: string,
-  repo: string,
-  path: string,
-  ref?: string,
-) {
-  const file = await githubRequest<GitHubContentFile>(
-    `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
-    { owner },
-  );
+export async function getFileContents(owner: string, repo: string, path: string, ref?: string) {
+  const file = await githubRequest<GitHubContentFile>(`/repos/${owner}/${repo}${buildContentsPath(path, ref)}`, { owner });
 
   if (file.type !== "file") {
     throw new AppError(`Path is not a file: ${path}`, 400);
@@ -150,16 +140,8 @@ export async function getFileContents(
   };
 }
 
-export async function getFileRaw(
-  owner: string,
-  repo: string,
-  path: string,
-  ref?: string,
-) {
-  const file = await githubRequest<GitHubContentFile>(
-    `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
-    { owner },
-  );
+export async function getFileRaw(owner: string, repo: string, path: string, ref?: string) {
+  const file = await githubRequest<GitHubContentFile>(`/repos/${owner}/${repo}${buildContentsPath(path, ref)}`, { owner });
 
   if (file.type !== "file") {
     throw new AppError(`Path is not a file: ${path}`, 400);
@@ -180,14 +162,7 @@ export type PaginatedFilesResult = {
   };
 };
 
-export async function getMultipleFiles(
-  owner: string,
-  repo: string,
-  paths: string[],
-  ref?: string,
-  cursor = 0,
-  pageSize = 10,
-): Promise<PaginatedFilesResult> {
+export async function getMultipleFiles(owner: string, repo: string, paths: string[], ref?: string, cursor = 0, pageSize = 10): Promise<PaginatedFilesResult> {
   const uniquePaths = [...new Set(paths)];
 
   const total = uniquePaths.length;
@@ -201,10 +176,7 @@ export async function getMultipleFiles(
 
   for (let i = 0; i < page.length; i++) {
     const file = await getFileContents(owner, repo, page[i]!, ref);
-    const fileBytes = Buffer.byteLength(
-      typeof file.content === "string" ? file.content : "",
-      "utf8",
-    );
+    const fileBytes = Buffer.byteLength(typeof file.content === "string" ? file.content : "", "utf8");
 
     if (files.length > 0 && bytesUsed + fileBytes > CONTENT_BYTE_BUDGET) {
       stoppedEarlyAt = start + i;
@@ -231,16 +203,8 @@ export async function getMultipleFiles(
   };
 }
 
-export async function listDirectory(
-  owner: string,
-  repo: string,
-  path = "",
-  ref?: string,
-) {
-  const entries = await githubRequest<GitHubContentDirectoryEntry[]>(
-    `/repos/${owner}/${repo}${buildContentsPath(path, ref)}`,
-    { owner },
-  );
+export async function listDirectory(owner: string, repo: string, path = "", ref?: string) {
+  const entries = await githubRequest<GitHubContentDirectoryEntry[]>(`/repos/${owner}/${repo}${buildContentsPath(path, ref)}`, { owner });
 
   if (!Array.isArray(entries)) {
     throw new AppError(`Path is not a directory: ${path || "/"}`, 400);
@@ -268,10 +232,7 @@ export async function upsertFile(
   let existingSha: string | undefined;
 
   try {
-    const existing = await githubRequest<GitHubContentFile>(
-      `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
-      { owner },
-    );
+    const existing = await githubRequest<GitHubContentFile>(`/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`, { owner });
 
     if (existing.type === "file") {
       existingSha = existing.sha;
@@ -282,22 +243,19 @@ export async function upsertFile(
     }
   }
 
-  const response = await githubRequest<GitHubUpsertFileResponse>(
-    `/repos/${owner}/${repo}${buildContentsPath(input.path)}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: input.message,
-        content: Buffer.from(input.content, "utf8").toString("base64"),
-        branch: input.branch,
-        ...(existingSha ? { sha: existingSha } : {}),
-      }),
-      owner,
+  const response = await githubRequest<GitHubUpsertFileResponse>(`/repos/${owner}/${repo}${buildContentsPath(input.path)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      message: input.message,
+      content: Buffer.from(input.content, "utf8").toString("base64"),
+      branch: input.branch,
+      ...(existingSha ? { sha: existingSha } : {}),
+    }),
+    owner,
+  });
 
   return {
     file: {
@@ -324,32 +282,23 @@ export async function batchUpsertFiles(
     files: BatchUpsertEntry[];
   },
 ) {
-  const refData = await githubRequest<GitHubRefResponse>(
-    `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`,
-    { owner },
-  );
+  const refData = await githubRequest<GitHubRefResponse>(`/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`, { owner });
   const baseCommitSha = refData.object.sha;
 
-  const baseCommit = await githubRequest<GitHubCommitObjectResponse>(
-    `/repos/${owner}/${repo}/git/commits/${baseCommitSha}`,
-    { owner },
-  );
+  const baseCommit = await githubRequest<GitHubCommitObjectResponse>(`/repos/${owner}/${repo}/git/commits/${baseCommitSha}`, { owner });
   const baseTreeSha = baseCommit.tree.sha;
 
   const treeEntries = await Promise.all(
     input.files.map(async (file) => {
-      const blob = await githubRequest<GitHubBlobResponse>(
-        `/repos/${owner}/${repo}/git/blobs`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: Buffer.from(file.content, "utf8").toString("base64"),
-            encoding: "base64",
-          }),
-          owner,
-        },
-      );
+      const blob = await githubRequest<GitHubBlobResponse>(`/repos/${owner}/${repo}/git/blobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: Buffer.from(file.content, "utf8").toString("base64"),
+          encoding: "base64",
+        }),
+        owner,
+      });
 
       return {
         path: file.path,
@@ -360,42 +309,33 @@ export async function batchUpsertFiles(
     }),
   );
 
-  const tree = await githubRequest<GitHubTreeResponse>(
-    `/repos/${owner}/${repo}/git/trees`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        base_tree: baseTreeSha,
-        tree: treeEntries,
-      }),
-      owner,
-    },
-  );
+  const tree = await githubRequest<GitHubTreeResponse>(`/repos/${owner}/${repo}/git/trees`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: treeEntries,
+    }),
+    owner,
+  });
 
-  const commit = await githubRequest<GitHubCommitResponse>(
-    `/repos/${owner}/${repo}/git/commits`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: input.message,
-        tree: tree.sha,
-        parents: [baseCommitSha],
-      }),
-      owner,
-    },
-  );
+  const commit = await githubRequest<GitHubCommitResponse>(`/repos/${owner}/${repo}/git/commits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: input.message,
+      tree: tree.sha,
+      parents: [baseCommitSha],
+    }),
+    owner,
+  });
 
-  await githubRequest<GitHubRefUpdateResponse>(
-    `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sha: commit.sha }),
-      owner,
-    },
-  );
+  await githubRequest<GitHubRefUpdateResponse>(`/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(input.branch)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sha: commit.sha }),
+    owner,
+  });
 
   return {
     commit: {
@@ -419,28 +359,22 @@ export async function deleteFile(
     message: string;
   },
 ) {
-  const existing = await githubRequest<GitHubContentFile>(
-    `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
-    { owner },
-  );
+  const existing = await githubRequest<GitHubContentFile>(`/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`, { owner });
 
   if (existing.type !== "file") {
     throw new AppError(`Path is not a file: ${input.path}`, 400);
   }
 
-  const response = await githubRequest<GitHubDeleteFileResponse>(
-    `/repos/${owner}/${repo}${buildContentsPath(input.path)}`,
-    {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: input.message,
-        sha: existing.sha,
-        branch: input.branch,
-      }),
-      owner,
-    },
-  );
+  const response = await githubRequest<GitHubDeleteFileResponse>(`/repos/${owner}/${repo}${buildContentsPath(input.path)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: input.message,
+      sha: existing.sha,
+      branch: input.branch,
+    }),
+    owner,
+  });
 
   return {
     deleted: true,
@@ -458,20 +392,14 @@ function applyPatchOp(content: string, op: PatchOp): string {
   switch (op.op) {
     case "replace_once": {
       if (!content.includes(op.find)) {
-        throw new AppError(
-          `patch_file: replace_once — find text not found: ${JSON.stringify(op.find)}`,
-          422,
-        );
+        throw new AppError(`patch_file: replace_once — find text not found: ${JSON.stringify(op.find)}`, 422);
       }
       return content.replace(op.find, op.replace);
     }
 
     case "replace_all": {
       if (!content.includes(op.find)) {
-        throw new AppError(
-          `patch_file: replace_all — find text not found: ${JSON.stringify(op.find)}`,
-          422,
-        );
+        throw new AppError(`patch_file: replace_all — find text not found: ${JSON.stringify(op.find)}`, 422);
       }
       const escaped = op.find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       return content.replace(new RegExp(escaped, "g"), op.replace);
@@ -479,20 +407,14 @@ function applyPatchOp(content: string, op: PatchOp): string {
 
     case "insert_before": {
       if (!content.includes(op.anchor)) {
-        throw new AppError(
-          `patch_file: insert_before — anchor text not found: ${JSON.stringify(op.anchor)}`,
-          422,
-        );
+        throw new AppError(`patch_file: insert_before — anchor text not found: ${JSON.stringify(op.anchor)}`, 422);
       }
       return content.replace(op.anchor, `${op.content}${op.anchor}`);
     }
 
     case "insert_after": {
       if (!content.includes(op.anchor)) {
-        throw new AppError(
-          `patch_file: insert_after — anchor text not found: ${JSON.stringify(op.anchor)}`,
-          422,
-        );
+        throw new AppError(`patch_file: insert_after — anchor text not found: ${JSON.stringify(op.anchor)}`, 422);
       }
       return content.replace(op.anchor, `${op.anchor}${op.content}`);
     }
@@ -509,10 +431,7 @@ export async function patchFile(
     patches: PatchOp[];
   },
 ) {
-  const existing = await githubRequest<GitHubContentFile>(
-    `/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`,
-    { owner },
-  );
+  const existing = await githubRequest<GitHubContentFile>(`/repos/${owner}/${repo}${buildContentsPath(input.path, input.branch)}`, { owner });
 
   if (existing.type !== "file") {
     throw new AppError(`Path is not a file: ${input.path}`, 400);
@@ -520,39 +439,30 @@ export async function patchFile(
 
   const rawContent = existing.content.replace(/\n/g, "");
   if (existing.encoding !== "base64") {
-    throw new AppError(
-      `patch_file: unsupported encoding "${existing.encoding}"`,
-      422,
-    );
+    throw new AppError(`patch_file: unsupported encoding "${existing.encoding}"`, 422);
   }
 
   let text = Buffer.from(rawContent, "base64").toString("utf8");
 
   if (text.includes("\0")) {
-    throw new AppError(
-      `patch_file: refusing to patch binary file: ${input.path}`,
-      422,
-    );
+    throw new AppError(`patch_file: refusing to patch binary file: ${input.path}`, 422);
   }
 
   for (const op of input.patches) {
     text = applyPatchOp(text, op);
   }
 
-  const response = await githubRequest<GitHubUpsertFileResponse>(
-    `/repos/${owner}/${repo}${buildContentsPath(input.path)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: input.message,
-        content: Buffer.from(text, "utf8").toString("base64"),
-        branch: input.branch,
-        sha: existing.sha,
-      }),
-      owner,
-    },
-  );
+  const response = await githubRequest<GitHubUpsertFileResponse>(`/repos/${owner}/${repo}${buildContentsPath(input.path)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: input.message,
+      content: Buffer.from(text, "utf8").toString("base64"),
+      branch: input.branch,
+      sha: existing.sha,
+    }),
+    owner,
+  });
 
   return {
     patched: true,

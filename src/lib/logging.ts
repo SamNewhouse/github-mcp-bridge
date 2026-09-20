@@ -19,9 +19,7 @@ function getDurationMs(startedAt: number): number {
   return Date.now() - startedAt;
 }
 
-export function sanitizeHeaders(
-  headers: http.IncomingHttpHeaders,
-): Record<string, unknown> {
+export function sanitizeHeaders(headers: http.IncomingHttpHeaders): Record<string, unknown> {
   return {
     authorization: headers.authorization ? "[present]" : "[missing]",
     "x-api-key": headers["x-api-key"] ? "[present]" : "[missing]",
@@ -36,11 +34,7 @@ export function sanitizeHeaders(
 
 type LogLevel = "info" | "warn" | "error";
 
-function writeLog(
-  level: LogLevel,
-  event: string,
-  data: Record<string, unknown>,
-): void {
+function writeLog(level: LogLevel, event: string, data: Record<string, unknown>): void {
   const payload = JSON.stringify({
     level,
     event,
@@ -76,9 +70,7 @@ export function createRequestLogger(req: http.IncomingMessage) {
   const requestId = getRequestId(req);
   const startedAt = Date.now();
 
-  function withContext(
-    data: Record<string, unknown> = {},
-  ): Record<string, unknown> {
+  function withContext(data: Record<string, unknown> = {}): Record<string, unknown> {
     return {
       requestId,
       durationMs: getDurationMs(startedAt),

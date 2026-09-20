@@ -45,10 +45,7 @@ type GitHubCommitSummary = {
 };
 
 export async function getCommit(owner: string, repo: string, ref: string) {
-  const commit = await githubRequest<GitHubCommitDetail>(
-    `/repos/${owner}/${repo}/commits/${ref}`,
-    { owner },
-  );
+  const commit = await githubRequest<GitHubCommitDetail>(`/repos/${owner}/${repo}/commits/${ref}`, { owner });
 
   return {
     sha: commit.sha,
@@ -70,22 +67,13 @@ export async function getCommit(owner: string, repo: string, ref: string) {
   };
 }
 
-export async function listCommits(
-  owner: string,
-  repo: string,
-  branch?: string,
-  path?: string,
-  perPage = 30,
-) {
+export async function listCommits(owner: string, repo: string, branch?: string, path?: string, perPage = 30) {
   const params = new URLSearchParams();
   if (branch) params.set("sha", branch);
   if (path) params.set("path", path);
   params.set("per_page", String(perPage));
 
-  const commits = await githubRequest<GitHubCommitSummary[]>(
-    `/repos/${owner}/${repo}/commits?${params.toString()}`,
-    { owner },
-  );
+  const commits = await githubRequest<GitHubCommitSummary[]>(`/repos/${owner}/${repo}/commits?${params.toString()}`, { owner });
 
   return commits.map((c) => ({
     sha: c.sha,

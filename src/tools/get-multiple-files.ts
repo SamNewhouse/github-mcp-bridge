@@ -12,6 +12,5 @@ export const getMultipleFilesTool = defineTool({
     "Each file includes a truncated flag — if true the content was cut at 3.5 MB and fullSizeBytes shows the real size.",
   ].join(" "),
   input: getMultipleFilesInputSchema,
-  handler: async ({ owner, repo, paths, ref, cursor, pageSize }) =>
-    getMultipleFiles(owner, repo, paths, ref, cursor, pageSize),
+  handler: async ({ owner, repo, paths, ref, cursor, pageSize }) => getMultipleFiles(owner, repo, paths, ref, cursor, pageSize),
 });

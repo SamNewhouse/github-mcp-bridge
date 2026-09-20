@@ -1,269 +1,155 @@
-type CacheEntry<T> = {
-  value: T;
+import * as crypto from "node:crypto";
+import { Redis } from "@upstash/redis";
+import { OPERATION_CACHE_TTL_MS, type RequestContext } from "../lib/request-context";
+
+type MemoryCacheEntry = {
+  value: unknown;
   expiresAt: number;
-  size: number;
+  repositoryPrefix: string | null;
 };
 
-const cache = new Map<string, CacheEntry<unknown>>();
+let redisClient: Redis | null | undefined;
 
-const DEFAULT_TTL_MS = 90_000;
-const MAX_CACHE_ENTRIES = 500;
-const MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024;
+const memoryCache = new Map<string, MemoryCacheEntry>();
 
-interface CacheConfig {
-  patterns: RegExp[];
-  ttlMs: number;
-  description: string;
-}
-
-const CACHE_CONFIGS: CacheConfig[] = [
-  {
-    patterns: [/^\/users\/[^/]+$/, /^\/orgs\/[^/]+$/, /^\/rate_limit$/],
-    ttlMs: 300_000,
-    description: "Static profiles",
-  },
-  {
-    patterns: [
-      /^\/repos\/[^/]+\/[^/]+$/,
-      /^\/repos\/[^/]+\/[^/]+\/(branches|languages|topics)$/,
-    ],
-    ttlMs: 120_000,
-    description: "Repository metadata",
-  },
-  {
-    patterns: [
-      /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+$/,
-      /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+\/files$/,
-      /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+\/comments$/,
-      /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+\/reviews$/,
-    ],
-    ttlMs: 60_000,
-    description: "Pull request details",
-  },
-  {
-    patterns: [
-      /^\/repos\/[^/]+\/[^/]+\/pulls$/,
-      /^\/repos\/[^/]+\/[^/]+\/issues$/,
-      /^\/repos\/[^/]+\/[^/]+\/commits$/,
-      /^\/repos\/[^/]+\/[^/]+\/branches$/,
-    ],
-    ttlMs: 30_000,
-    description: "Frequently changing lists",
-  },
-];
-
-/**
- * Estimates the memory size of a cache value in bytes.
- *
- * JSON serialization is used as a lightweight approximation. The result
- * assumes two bytes per serialized character.
- *
- * @param value - The value whose approximate size should be calculated.
- * @returns The estimated size in bytes.
- */
-function estimateSize(value: unknown): number {
-  try {
-    return JSON.stringify(value).length * 2;
-  } catch {
-    return 1024;
-  }
-}
-
-/**
- * Creates a stable key for a cache entry.
- *
- * The representation is included so that requests for the same endpoint
- * can cache different response formats, such as JSON and unified diff text.
- *
- * @param method - The HTTP method.
- * @param path - The GitHub API path.
- * @param body - The request body, if present.
- * @param representation - The response representation.
- * @returns The serialized cache key.
- */
-function cacheKey(
-  method: string,
-  path: string,
-  body?: unknown,
-  representation = "default",
-): string {
-  return JSON.stringify([
-    method.toUpperCase(),
-    path,
-    body ?? null,
-    representation,
-  ]);
-}
-
-/**
- * Removes the oldest cache entry.
- *
- * Map insertion order is used as a simple FIFO eviction strategy.
- */
-function evictOldest(): void {
-  if (cache.size === 0) {
-    return;
+function getRedis(): Redis | null {
+  if (redisClient !== undefined) {
+    return redisClient;
   }
 
-  const oldestKey = cache.keys().next().value;
+  const url = process.env.UPSTASH_REDIS_KV_REST_API_URL ?? process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
 
-  if (oldestKey) {
-    cache.delete(oldestKey);
-  }
+  const token = process.env.UPSTASH_REDIS_KV_REST_API_TOKEN ?? process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  redisClient = url && token && process.env.VERCEL === "1" ? new Redis({ url, token }) : null;
+
+  return redisClient;
 }
 
-/**
- * Calculates the estimated total size of all cache entries.
- *
- * @returns The estimated cache size in bytes.
- */
-function getTotalCacheSize(): number {
-  let totalSize = 0;
+function getRepositoryPrefix(path: string): string | null {
+  const segments = path.split("?")[0].split("/").filter(Boolean);
 
-  for (const entry of cache.values()) {
-    totalSize += entry.size;
-  }
-
-  return totalSize;
-}
-
-/**
- * Evicts the oldest entries until both cache limits are satisfied.
- */
-function evictUntilUnderLimit(): void {
-  while (
-    cache.size > MAX_CACHE_ENTRIES ||
-    getTotalCacheSize() > MAX_CACHE_SIZE_BYTES
-  ) {
-    if (cache.size === 0) {
-      break;
-    }
-
-    evictOldest();
-  }
-}
-
-/**
- * Gets the cache TTL configured for a GitHub API path.
- *
- * The query string and one trailing slash are ignored when matching
- * configured endpoint patterns.
- *
- * @param path - The GitHub API path.
- * @returns The TTL in milliseconds.
- */
-export function getCacheTTL(path: string): number {
-  const normalizedPath = path.split("?")[0].replace(/\/$/, "");
-
-  for (const config of CACHE_CONFIGS) {
-    if (config.patterns.some((pattern) => pattern.test(normalizedPath))) {
-      return config.ttlMs;
-    }
-  }
-
-  return DEFAULT_TTL_MS;
-}
-
-/**
- * Retrieves a non-expired value from the cache.
- *
- * @typeParam T - The expected cached value type.
- * @param method - The HTTP method.
- * @param path - The GitHub API path.
- * @param body - The request body, if present.
- * @param representation - The response representation.
- * @returns The cached value, or `null` when no valid entry exists.
- */
-export function getFromCache<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-  representation = "default",
-): T | null {
-  const key = cacheKey(method, path, body, representation);
-  const entry = cache.get(key);
-
-  if (!entry) {
+  if (segments[0] !== "repos" || !segments[1] || !segments[2]) {
     return null;
   }
 
-  if (Date.now() > entry.expiresAt) {
-    cache.delete(key);
+  return `/repos/${segments[1]}/${segments[2]}`;
+}
+
+function getCacheKey(context: RequestContext, method: string, path: string, body: unknown, representation: string): string {
+  const requestHash = crypto
+    .createHash("sha256")
+    .update(JSON.stringify([method.toUpperCase(), path, body ?? null, representation]))
+    .digest("hex");
+
+  return ["mcp", "operation", context.principalHash, context.requestId, "github", requestHash].join(":");
+}
+
+function getOperationIndexKey(context: RequestContext): string {
+  return ["mcp", "operation", context.principalHash, context.requestId, "github-keys"].join(":");
+}
+
+function getMemoryOperationPrefix(context: RequestContext): string {
+  return ["mcp", "operation", context.principalHash, context.requestId, "github"].join(":");
+}
+
+export async function getFromOperationCache<T>(
+  context: RequestContext | null,
+  method: string,
+  path: string,
+  body: unknown,
+  representation: string,
+): Promise<T | null> {
+  if (!context) {
+    return null;
+  }
+
+  const cacheKey = getCacheKey(context, method, path, body, representation);
+  const redis = getRedis();
+
+  if (redis) {
+    return (await redis.get<T>(cacheKey)) ?? null;
+  }
+
+  const entry = memoryCache.get(cacheKey);
+
+  if (!entry || Date.now() >= entry.expiresAt) {
+    memoryCache.delete(cacheKey);
     return null;
   }
 
   return entry.value as T;
 }
 
-/**
- * Stores a value in the cache.
- *
- * Existing entries with the same key are replaced and moved to the newest
- * position before eviction limits are applied.
- *
- * @typeParam T - The value type being cached.
- * @param method - The HTTP method.
- * @param path - The GitHub API path.
- * @param body - The request body, if present.
- * @param value - The value to cache.
- * @param options - Optional TTL and response representation metadata.
- */
-export function setInCache<T>(
+export async function setInOperationCache<T>(
+  context: RequestContext | null,
   method: string,
   path: string,
-  body: unknown | undefined,
+  body: unknown,
+  representation: string,
   value: T,
-  options?: {
-    ttlMs?: number;
-    representation?: string;
-  },
-): void {
-  const ttlMs = options?.ttlMs ?? getCacheTTL(path);
-  const representation = options?.representation ?? "default";
-  const key = cacheKey(method, path, body, representation);
-  const size = estimateSize(value);
-
-  if (cache.has(key)) {
-    cache.delete(key);
+): Promise<void> {
+  if (!context) {
+    return;
   }
 
-  cache.set(key, {
-    value,
-    expiresAt: Date.now() + ttlMs,
-    size,
-  });
+  const cacheKey = getCacheKey(context, method, path, body, representation);
+  const repositoryPrefix = getRepositoryPrefix(path);
+  const redis = getRedis();
 
-  evictUntilUnderLimit();
+  if (redis) {
+    const indexKey = getOperationIndexKey(context);
+
+    await redis.set(cacheKey, value, {
+      px: OPERATION_CACHE_TTL_MS,
+    });
+
+    await redis.sadd(indexKey, cacheKey);
+    await redis.pexpire(indexKey, OPERATION_CACHE_TTL_MS);
+    return;
+  }
+
+  memoryCache.set(cacheKey, {
+    value,
+    expiresAt: Date.now() + OPERATION_CACHE_TTL_MS,
+    repositoryPrefix,
+  });
 }
 
 /**
- * Invalidates cached entries associated with a path.
- *
- * Entries are removed when their path starts with `pathPattern` or belongs
- * to the same repository prefix as the mutated path.
- *
- * @param pathPattern - The path or path prefix that changed.
+ * Removes only cache entries for the repository mutated by a GitHub write.
+ * The Redis set is an operation-local index: it avoids a production KEYS scan.
  */
-export function invalidateCacheForPath(pathPattern: string): void {
-  const keysToDelete: string[] = [];
-  const pathPrefix = pathPattern.split("/").slice(0, 3).join("/");
-
-  for (const key of cache.keys()) {
-    try {
-      const [, path] = JSON.parse(key) as [string, string, unknown, string?];
-
-      const sameRepository =
-        pathPrefix === path.split("/").slice(0, 3).join("/");
-
-      if (path.startsWith(pathPattern) || sameRepository) {
-        keysToDelete.push(key);
-      }
-    } catch {
-      // Ignore malformed cache keys.
-    }
+export async function invalidateOperationCacheForPath(context: RequestContext | null, path: string): Promise<void> {
+  if (!context) {
+    return;
   }
 
-  for (const key of keysToDelete) {
-    cache.delete(key);
+  const repositoryPrefix = getRepositoryPrefix(path);
+
+  if (!repositoryPrefix) {
+    return;
+  }
+
+  const redis = getRedis();
+
+  if (redis) {
+    const indexKey = getOperationIndexKey(context);
+    const keys = await redis.smembers<string[]>(indexKey);
+
+    if (keys.length > 0) {
+      await redis.del(...keys);
+      await redis.del(indexKey);
+    }
+
+    return;
+  }
+
+  const operationPrefix = getMemoryOperationPrefix(context);
+
+  for (const [cacheKey, entry] of memoryCache.entries()) {
+    if (cacheKey.startsWith(operationPrefix) && entry.repositoryPrefix === repositoryPrefix) {
+      memoryCache.delete(cacheKey);
+    }
   }
 }
