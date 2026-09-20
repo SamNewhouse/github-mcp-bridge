@@ -7,7 +7,7 @@ describe("smoke", () => {
   });
 
   test("tools/list succeeds after initialize", async () => {
-    const sessionId = await initializeSession();
+    await initializeSession();
 
     const res = await postSessionJsonRpc({
       jsonrpc: "2.0",
@@ -20,12 +20,17 @@ describe("smoke", () => {
     expect(json.error).toBeUndefined();
     expect(Array.isArray(json.result.tools)).toBe(true);
     expect(json.result.tools.length).toBeGreaterThan(0);
-    expect(res.headers.get("mcp-session-id")).toBe(sessionId);
+
+    // We no longer enforce a real MCP session; just ensure a header is present.
+    const returnedSession = res.headers.get("mcp-session-id");
+    expect(typeof returnedSession).toBe("string");
+    expect(returnedSession?.length).toBeGreaterThan(0);
   });
 
-  test("initialize succeeds and provides a session", async () => {
+  test("initialize succeeds and provides a session header", async () => {
     const sessionId = await initializeSession();
 
+    // Session is now a formality; we only care that it’s a non‑empty string.
     expect(typeof sessionId).toBe("string");
     expect(sessionId.length).toBeGreaterThan(0);
   });

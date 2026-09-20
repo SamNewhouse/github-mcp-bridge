@@ -2,61 +2,24 @@ import * as http from "node:http";
 import { assertAuthorized, getAuthorizedPrincipal } from "./auth";
 import { runWithRequestContext } from "./github/request-context";
 import { getErrorMessage, getErrorStatus } from "./lib/errors";
-import { getRequestUrl, readJsonBody, sendJson, sendJsonRpcError, sendJsonRpcResultWithSession } from "./lib/http";
+import { readJsonBody, sendJson, sendJsonRpcError, sendJsonRpcResultWithSession } from "./lib/http";
 import { getClientIp, isRateLimited, recordAuthFailure, recordAuthSuccess } from "./lib/limiter";
 import { createRequestLogger } from "./lib/logging";
-import { RPC_SESSION_REQUIRED, RPC_UNAUTHORIZED, SUPPORTED_PROTOCOL_VERSION, toMcpToolResult } from "./lib/mcp-protocol";
+import { RPC_UNAUTHORIZED, SUPPORTED_PROTOCOL_VERSION, toMcpToolResult } from "./lib/mcp-protocol";
 import { createRequestContext } from "./lib/request-context";
-import { createSession, deleteSessionForPrincipal, getSessionIdFromHeaders, touchSessionForPrincipal } from "./lib/session";
-import { getSplashHtml } from "./splash";
+import { createSession, getSessionIdFromHeaders, touchSessionForPrincipal } from "./lib/session";
+import { sendSplashPage } from "./splash";
 import { executeTool, getToolList } from "./tools";
 import { jsonRpcRequestSchema, toolCallParamsSchema } from "./lib/validation";
+import { createRouter, type Router } from "./lib/router";
 
-const CACHED_TOOL_LIST = getToolList();
+export const CACHED_TOOL_LIST = getToolList();
 const CACHED_TOOL_LIST_RESPONSE = { tools: CACHED_TOOL_LIST };
 
-/**
- * Sends the public splash page response.
- *
- * @param res - The HTTP response to populate.
- */
-function sendSplashPage(res: http.ServerResponse): void {
-  const html = getSplashHtml(CACHED_TOOL_LIST.length);
-
-  res.statusCode = 200;
-  res.setHeader("content-type", "text/html; charset=utf-8");
-  res.setHeader(
-    "content-security-policy",
-    "default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; script-src 'none'",
-  );
-  res.setHeader("x-content-type-options", "nosniff");
-  res.setHeader("x-frame-options", "DENY");
-  res.setHeader("referrer-policy", "no-referrer");
-  res.end(html);
-}
-
-/**
- * Returns the MCP protocol version supported by this server.
- *
- * @param _params - Client-supplied initialization parameters.
- * @returns The supported protocol version.
- */
 function resolveProtocolVersion(_params: unknown): string {
   return SUPPORTED_PROTOCOL_VERSION;
 }
 
-/**
- * Resolves an existing valid MCP session or creates a new one.
- *
- * The MCP session remains a protocol-level transport concern. It is not used
- * for cache scoping: the operation cache instead uses principal +
- * X-Request-Id, which remains stable across the short MCP sessions created by
- * the connector.
- *
- * @param principal - The authenticated request principal.
- * @param headers - Incoming HTTP headers.
- * @returns The resolved MCP session information.
- */
 async function resolveInitialSession(principal: string, headers: http.IncomingHttpHeaders) {
   const requestedSessionId = getSessionIdFromHeaders(headers);
 
@@ -77,181 +40,109 @@ async function resolveInitialSession(principal: string, headers: http.IncomingHt
   };
 }
 
-/**
- * Requires a valid session for a post-initialize MCP request.
- *
- * @param principal - The authenticated caller.
- * @param headers - Incoming HTTP headers.
- * @returns The valid session ID, or null when it is absent, invalid, or expired.
- */
-async function requireSession(principal: string, headers: http.IncomingHttpHeaders): Promise<string | null> {
-  const sessionId = getSessionIdFromHeaders(headers);
-
-  if (!sessionId || !(await touchSessionForPrincipal(sessionId, principal))) {
-    return null;
-  }
-
-  return sessionId;
-}
-
-/**
- * Handles an incoming MCP HTTP request.
- *
- * MCP session state validates the transport conversation. The independent
- * request context is derived from the authenticated caller plus the upstream
- * X-Request-Id and scopes the temporary Redis GitHub response cache.
- *
- * @param req - The incoming HTTP request.
- * @param res - The outgoing HTTP response.
- */
 export async function handleMcpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const log = createRequestLogger(req);
 
-  try {
-    const url = getRequestUrl(req);
+  const router: Router = createRouter();
 
-    if (!url) {
-      log.warn("request_rejected", {
-        reason: "missing_url",
-      });
-
-      return sendJson(res, 400, {
-        error: "Missing URL",
-      });
+  // Health check (authorized)
+  router.set("GET", "/health", async (req, res, log) => {
+    try {
+      assertAuthorized(req, log);
+    } catch {
+      return sendJson(res, 401, { error: "Unauthorized" });
     }
+    return sendJson(res, 200, { ok: true });
+  });
 
-    if (url.pathname === "/health") {
-      try {
-        assertAuthorized(req, log);
-      } catch {
-        return sendJson(res, 401, {
-          error: "Unauthorized",
-        });
-      }
-
-      return sendJson(res, 200, {
-        ok: true,
-      });
-    }
-
-    if (url.pathname === "/" && req.method === "HEAD") {
-      try {
-        assertAuthorized(req, log);
-      } catch {
-        res.statusCode = 401;
-        res.end();
-        return;
-      }
-
-      res.statusCode = 200;
+  // Root: HEAD
+  router.set("HEAD", "/", async (req, res, log) => {
+    try {
+      assertAuthorized(req, log);
+    } catch {
+      res.statusCode = 401;
       res.end();
       return;
     }
+    res.statusCode = 200;
+    res.end();
+  });
 
-    if (url.pathname === "/" && req.method === "GET") {
-      const acceptsHtml = req.headers.accept?.includes("text/html") ?? false;
-
-      if (acceptsHtml) {
-        return sendSplashPage(res);
-      }
-
-      log.warn("request_rejected", {
-        path: url.pathname,
-        method: req.method ?? null,
-        reason: "method_not_allowed",
-      });
-
-      return sendJson(res, 405, {
-        error: "Method not allowed",
-      });
+  // Root: GET (splash or 405)
+  router.set("GET", "/", async (req, res, log) => {
+    const acceptsHtml = req.headers.accept?.includes("text/html") ?? false;
+    if (acceptsHtml) {
+      return sendSplashPage(res);
     }
 
-    if (url.pathname !== "/") {
-      log.warn("request_rejected", {
-        path: url.pathname,
-        reason: "not_found",
-      });
+    log.warn("request_rejected", {
+      path: "/",
+      method: "GET",
+      reason: "method_not_allowed",
+    });
 
-      return sendJson(res, 404, {
-        error: "Not found",
-      });
-    }
+    return sendJson(res, 405, { error: "Method not allowed" });
+  });
 
+  // cache delete (DELETE /) – no longer touches sessions.
+  // Operation cache is scoped by requestId and expires via TTL only.
+  router.set("DELETE", "/", async (req, res, log) => {
     const clientIp = getClientIp(req);
-
     if (isRateLimited(clientIp)) {
       log.warn("authorization_rate_limited", {
-        method: req.method ?? null,
+        method: "DELETE",
         url: req.url ?? null,
         ip: clientIp,
       });
-
-      return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Too many failed attempts — try again later");
+      return sendJson(res, 429, { error: "Too many failed attempts — try again later" });
     }
 
     let principal: string;
-
     try {
       principal = getAuthorizedPrincipal(req, log);
       recordAuthSuccess(clientIp);
     } catch {
       recordAuthFailure(clientIp);
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
 
+    const requestContext = createRequestContext(req.headers, principal);
+    const requestId = requestContext?.requestId ?? null;
+
+    log.info("mcp_delete_acknowledged", {
+      requestId,
+      note: "Operation cache is scoped by requestId and expires via 5‑minute TTL; no explicit deletion.",
+    });
+
+    res.statusCode = 204;
+    res.setHeader("mcp-session-id", "no-session");
+    res.end();
+  });
+
+  // Main JSON-RPC endpoint (POST /)
+  router.set("POST", "/", async (req, res, log) => {
+    const clientIp = getClientIp(req);
+
+    if (isRateLimited(clientIp)) {
+      log.warn("authorization_rate_limited", {
+        method: "POST",
+        url: req.url ?? null,
+        ip: clientIp,
+      });
+      return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Too many failed attempts — try again later");
+    }
+
+    let principal: string;
+    try {
+      principal = getAuthorizedPrincipal(req, log);
+      recordAuthSuccess(clientIp);
+    } catch {
+      recordAuthFailure(clientIp);
       return sendJsonRpcError(res, null, RPC_UNAUTHORIZED, "Unauthorized");
     }
 
     const requestContext = createRequestContext(req.headers, principal);
-
-    if (req.method === "DELETE") {
-      const sessionId = getSessionIdFromHeaders(req.headers);
-
-      if (!sessionId) {
-        log.warn("session_delete_rejected", {
-          reason: "missing_session_id",
-          requestId: requestContext?.requestId ?? null,
-        });
-
-        return sendJson(res, 400, {
-          error: "Missing MCP session ID",
-        });
-      }
-
-      const deleted = await deleteSessionForPrincipal(sessionId, principal);
-
-      if (!deleted) {
-        log.warn("session_delete_rejected", {
-          reason: "invalid_or_expired_session",
-          sessionId,
-          requestId: requestContext?.requestId ?? null,
-        });
-
-        return sendJson(res, 404, {
-          error: "Session not found",
-        });
-      }
-
-      log.info("mcp_session_deleted", {
-        sessionId,
-        requestId: requestContext?.requestId ?? null,
-      });
-
-      res.statusCode = 204;
-      res.setHeader("mcp-session-id", sessionId);
-      res.end();
-      return;
-    }
-
-    if (req.method !== "POST") {
-      log.warn("request_rejected", {
-        path: url.pathname,
-        method: req.method ?? null,
-        reason: "method_not_allowed",
-      });
-
-      return sendJson(res, 405, {
-        error: "Method not allowed",
-      });
-    }
+    const requestId = requestContext?.requestId ?? null;
 
     const rawBody = await readJsonBody(req);
     const parsed = jsonRpcRequestSchema.safeParse(rawBody);
@@ -259,188 +150,138 @@ export async function handleMcpRequest(req: http.IncomingMessage, res: http.Serv
     if (!parsed.success) {
       log.warn("jsonrpc_invalid_request", {
         issues: parsed.error.issues,
-        requestId: requestContext?.requestId ?? null,
+        requestId,
       });
 
-      return sendJsonRpcError(
-        res,
-        null,
-        -32600,
-        "Invalid Request",
-        {
-          issues: parsed.error.issues,
-        },
-        400,
-      );
+      return sendJsonRpcError(res, null, -32600, "Invalid Request", { issues: parsed.error.issues }, 400);
     }
 
     const body = parsed.data;
 
-    if (body.method === "initialize") {
-      const session = await resolveInitialSession(principal, req.headers);
-      const protocolVersion = resolveProtocolVersion(body.params);
+    // We no longer enforce or rely on a valid MCP session for tool calls.
+    // The real operation scope is requestContext (principal + X-Request-Id).
+    // For responses we just send a constant dummy session value.
+    const dummySessionId = "no-session";
 
-      log.info("mcp_session_initialized", {
-        id: body.id ?? null,
-        sessionId: session.sessionId,
-        requestId: requestContext?.requestId ?? null,
-        protocolVersion,
-        resumed: !session.autoResumed,
-        requestedSessionId: session.requestedSessionId,
-        autoResumed: session.autoResumed,
-      });
+    type MethodHandler = () => Promise<void>;
 
-      return sendJsonRpcResultWithSession(
-        res,
-        body.id ?? null,
-        {
-          protocolVersion,
-          capabilities: {
-            tools: {},
-          },
-          serverInfo: {
-            name: "github-mcp-bridge",
-            version: "0.1.0",
-          },
-        },
-        session.sessionId,
-      );
-    }
+    const methods: Record<string, MethodHandler> = {
+      initialize: async () => {
+        const session = await resolveInitialSession(principal, req.headers);
+        const protocolVersion = resolveProtocolVersion(body.params);
 
-    const sessionId = await requireSession(principal, req.headers);
-
-    if (!sessionId) {
-      log.warn("mcp_session_required", {
-        id: body.id ?? null,
-        method: body.method,
-        requestId: requestContext?.requestId ?? null,
-      });
-
-      return sendJsonRpcError(res, body.id ?? null, RPC_SESSION_REQUIRED, "MCP session required", {
-        message: "Call initialize first and include the returned Mcp-Session-Id header.",
-      });
-    }
-
-    if (body.method === "ping") {
-      return sendJsonRpcResultWithSession(res, body.id ?? null, {}, sessionId);
-    }
-
-    if (body.method === "notifications/initialized") {
-      res.statusCode = 202;
-      res.setHeader("mcp-session-id", sessionId);
-      res.end();
-      return;
-    }
-
-    if (body.method === "tools/list") {
-      log.info("tools_list_requested", {
-        id: body.id ?? null,
-        sessionId,
-        requestId: requestContext?.requestId ?? null,
-        toolCount: CACHED_TOOL_LIST.length,
-        toolNames: CACHED_TOOL_LIST.map((tool) => tool.name),
-      });
-
-      return sendJsonRpcResultWithSession(res, body.id ?? null, CACHED_TOOL_LIST_RESPONSE, sessionId);
-    }
-
-    if (body.method === "tools/call") {
-      const params = toolCallParamsSchema.safeParse(body.params);
-
-      if (!params.success) {
-        log.warn("jsonrpc_invalid_params", {
+        log.info("mcp_session_initialized", {
           id: body.id ?? null,
-          method: body.method,
-          issues: params.error.issues,
-          sessionId,
-          requestId: requestContext?.requestId ?? null,
+          sessionId: session.sessionId,
+          requestId,
+          protocolVersion,
+          resumed: !session.autoResumed,
+          requestedSessionId: session.requestedSessionId,
+          autoResumed: session.autoResumed,
         });
 
-        return sendJsonRpcError(
+        return sendJsonRpcResultWithSession(
           res,
           body.id ?? null,
-          -32602,
-          "Invalid params",
           {
-            issues: params.error.issues,
+            protocolVersion,
+            capabilities: { tools: {} },
+            serverInfo: { name: "github-mcp-bridge", version: "0.1.0" },
           },
-          400,
+          session.sessionId,
         );
-      }
+      },
 
-      const toolName = params.data.name;
-      const toolArgs = params.data.arguments;
+      ping: async () => {
+        return sendJsonRpcResultWithSession(res, body.id ?? null, {}, dummySessionId);
+      },
 
-      try {
-        const result = await runWithRequestContext(requestContext, () => executeTool(toolName, toolArgs));
+      notifications_initialized: async () => {
+        res.statusCode = 202;
+        res.setHeader("mcp-session-id", dummySessionId);
+        res.end();
+      },
 
-        const mcpResult = toMcpToolResult(result);
-
-        return sendJsonRpcResultWithSession(res, body.id ?? null, mcpResult, sessionId);
-      } catch (error) {
-        const status = getErrorStatus(error);
-        const message = getErrorMessage(error);
-
-        log.error("tool_invocation_failed", {
+      tools_list: async () => {
+        log.info("tools_list_requested", {
           id: body.id ?? null,
-          tool: toolName,
-          status,
-          message,
-          sessionId,
-          requestId: requestContext?.requestId ?? null,
-          errorName: error instanceof Error ? error.name : "UnknownError",
+          requestId,
+          toolCount: CACHED_TOOL_LIST.length,
+          toolNames: CACHED_TOOL_LIST.map((t) => t.name),
         });
 
-        if (status === 400) {
-          return sendJsonRpcError(
-            res,
-            body.id ?? null,
-            -32602,
-            "Invalid params",
-            {
-              tool: toolName,
-              message,
-            },
-            400,
-          );
+        return sendJsonRpcResultWithSession(res, body.id ?? null, CACHED_TOOL_LIST_RESPONSE, dummySessionId);
+      },
+
+      tools_call: async () => {
+        const params = toolCallParamsSchema.safeParse(body.params);
+
+        if (!params.success) {
+          log.warn("jsonrpc_invalid_params", {
+            id: body.id ?? null,
+            method: body.method,
+            issues: params.error.issues,
+            requestId,
+          });
+
+          return sendJsonRpcError(res, body.id ?? null, -32602, "Invalid params", { issues: params.error.issues }, 400);
         }
 
-        if (status === 401) {
-          return sendJsonRpcError(res, body.id ?? null, RPC_UNAUTHORIZED, "Unauthorized", {
+        const toolName = params.data.name;
+        const toolArgs = params.data.arguments;
+
+        try {
+          const result = await runWithRequestContext(requestContext, () => executeTool(toolName, toolArgs));
+          const mcpResult = toMcpToolResult(result);
+          return sendJsonRpcResultWithSession(res, body.id ?? null, mcpResult, dummySessionId);
+        } catch (error) {
+          const status = getErrorStatus(error);
+          const message = getErrorMessage(error);
+
+          log.error("tool_invocation_failed", {
+            id: body.id ?? null,
+            tool: toolName,
+            status,
+            message,
+            requestId,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          });
+
+          if (status === 400) {
+            return sendJsonRpcError(res, body.id ?? null, -32602, "Invalid params", { tool: toolName, message }, 400);
+          }
+
+          if (status === 401) {
+            return sendJsonRpcError(res, body.id ?? null, RPC_UNAUTHORIZED, "Unauthorized", {
+              tool: toolName,
+              message,
+            });
+          }
+
+          return sendJsonRpcError(res, body.id ?? null, -32603, "Internal error", {
             tool: toolName,
             message,
           });
         }
+      },
+    };
 
-        return sendJsonRpcError(res, body.id ?? null, -32603, "Internal error", {
-          tool: toolName,
-          message,
-        });
-      }
+    // Normalize MCP method names to handler keys.
+    const methodKey = body.method.replace("/", "_");
+
+    const handler = methods[methodKey];
+    if (!handler) {
+      log.warn("jsonrpc_method_not_found", {
+        id: body.id ?? null,
+        method: body.method,
+        requestId,
+      });
+
+      return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
     }
 
-    log.warn("jsonrpc_method_not_found", {
-      id: body.id ?? null,
-      method: body.method,
-      sessionId,
-      requestId: requestContext?.requestId ?? null,
-    });
+    return handler();
+  });
 
-    return sendJsonRpcError(res, body.id ?? null, -32601, "Method not found");
-  } catch (error) {
-    const status = getErrorStatus(error);
-    const message = getErrorMessage(error);
-
-    log.error("request_failed", {
-      method: req.method ?? null,
-      url: req.url ?? null,
-      status,
-      message,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    });
-
-    return sendJsonRpcError(res, null, -32603, "Internal error", {
-      message,
-    });
-  }
+  return router.handle(req, res, log);
 }

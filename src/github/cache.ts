@@ -94,7 +94,6 @@ export async function setInOperationCache<T>(
   }
 
   const cacheKey = getCacheKey(context, method, path, body, representation);
-  const repositoryPrefix = getRepositoryPrefix(path);
   const redis = getRedis();
 
   if (redis) {
@@ -108,6 +107,8 @@ export async function setInOperationCache<T>(
     await redis.pexpire(indexKey, OPERATION_CACHE_TTL_MS);
     return;
   }
+
+  const repositoryPrefix = getRepositoryPrefix(path);
 
   memoryCache.set(cacheKey, {
     value,
@@ -139,9 +140,9 @@ export async function invalidateOperationCacheForPath(context: RequestContext | 
 
     if (keys.length > 0) {
       await redis.del(...keys);
-      await redis.del(indexKey);
     }
 
+    await redis.del(indexKey);
     return;
   }
 
